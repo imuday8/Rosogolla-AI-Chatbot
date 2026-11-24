@@ -265,12 +265,358 @@ $('usage').onclick=()=>{
   total.append(node('span','Total'),node('strong',number(usage.total)+' tokens'));
   openDialog('Token usage',node('p','Token usage for this conversation. Input includes context sent with each request.','dialog-copy'),chart,total);
 };
-$('intro').onclick=()=>{
-  const video=node('video');
-  video.src='/intro.mp4?v=2';video.controls=true;video.playsInline=true;
-  openDialog('Meet Rosogolla',video);
-  video.play().catch(()=>{});
-};
+function setupIntroOverlay() {
+  const overlay = $('intro-overlay');
+  const video = $('intro-video');
+  const skipBtn = $('intro-skip');
+  const muteBtn = $('intro-mute');
+  const muteText = $('intro-mute-text');
+  const progressFill = $('intro-progress-fill');
+  if (!overlay || !video) return;
+
+  let dismissed = false;
+  function dismiss() {
+    if (dismissed) return;
+    dismissed = true;
+    overlay.classList.add('fade-out');
+    setTimeout(() => {
+      overlay.hidden = true;
+      try { video.pause(); } catch (_) {}
+    }, 450);
+  }
+
+  video.play().catch(() => {});
+
+  video.ontimeupdate = () => {
+    if (video.duration && progressFill) {
+      const pct = Math.min(100, Math.max(0, (video.currentTime / video.duration) * 100));
+      progressFill.style.width = pct + '%';
+    }
+  };
+
+  video.onended = () => dismiss();
+
+  if (skipBtn) skipBtn.onclick = () => dismiss();
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target.classList.contains('intro-backdrop') || e.target === overlay) {
+      dismiss();
+    }
+  });
+
+  if (muteBtn) {
+    muteBtn.onclick = () => {
+      video.muted = !video.muted;
+      if (muteText) muteText.textContent = video.muted ? 'Sound on' : 'Mute';
+    };
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (!overlay.hidden && (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter')) {
+      if (e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'INPUT') {
+        dismiss();
+      }
+    }
+  });
+}
+
+function setupRosogollaBowl() {
+  const canvas = $('rosogolla-bowl');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const size = 400;
+  canvas.width = size * dpr;
+  canvas.height = size * dpr;
+  ctx.scale(dpr, dpr);
+
+  let angle = 0;
+  let speed = 0.014;
+  let targetSpeed = 0.014;
+  let mouseTiltX = 0;
+  let mouseTiltY = 0;
+  let currentTiltX = 0;
+  let currentTiltY = 0;
+
+  const sweets = [
+    { x: 0, y: -15, z: 0, r: 35 },
+    { x: 58, y: -9, z: 0, r: 30 },
+    { x: 29, y: -7, z: 50.2, r: 30 },
+    { x: -29, y: -10, z: 50.2, r: 30 },
+    { x: -58, y: -8, z: 0, r: 30 },
+    { x: -29, y: -9, z: -50.2, r: 30 },
+    { x: 29, y: -11, z: -50.2, r: 30 }
+  ];
+
+  const pores = sweets.map((s, idx) => {
+    const list = [];
+    for (let p = 0; p < 7; p++) {
+      const theta = (p * 1.3) + idx;
+      const dist = (0.2 + (p % 4) * 0.18) * s.r;
+      list.push({
+        dx: Math.cos(theta) * dist,
+        dy: Math.sin(theta) * dist * 0.7,
+        size: 0.9 + (p % 3) * 0.5
+      });
+    }
+    return list;
+  });
+
+  const stage = canvas.parentElement;
+  if (stage) {
+    stage.addEventListener('pointermove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const ny = ((e.clientY - rect.top) / rect.height) * 2 - 1;
+      mouseTiltX = nx * 10;
+      mouseTiltY = ny * 6;
+      targetSpeed = 0.024;
+    });
+    stage.addEventListener('pointerleave', () => {
+      mouseTiltX = 0;
+      mouseTiltY = 0;
+      targetSpeed = 0.014;
+    });
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, size, size);
+
+    speed += (targetSpeed - speed) * 0.05;
+    currentTiltX += (mouseTiltX - currentTiltX) * 0.08;
+    currentTiltY += (mouseTiltY - currentTiltY) * 0.08;
+    angle = (angle + speed) % (Math.PI * 2);
+
+    const cx = 200 + currentTiltX;
+    const cy = 205 + currentTiltY;
+    const pitch = 0.44;
+
+    // 1. Table Ambient Glow & Cast Shadow beneath the bowl
+    ctx.save();
+    const glowGrad = ctx.createRadialGradient(cx, cy + 95, 20, cx, cy + 95, 140);
+    glowGrad.addColorStop(0, 'rgba(208, 243, 68, 0.16)');
+    glowGrad.addColorStop(0.5, 'rgba(150, 200, 30, 0.06)');
+    glowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = glowGrad;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 95, 140, 48, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    const shadowGrad = ctx.createRadialGradient(cx, cy + 92, 10, cx, cy + 92, 110);
+    shadowGrad.addColorStop(0, 'rgba(0, 0, 0, 0.75)');
+    shadowGrad.addColorStop(0.6, 'rgba(12, 16, 8, 0.4)');
+    shadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = shadowGrad;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 92, 110, 36, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 2. Outer Ceramic Bowl (Back wall & base)
+    ctx.save();
+    ctx.fillStyle = '#0f120c';
+    ctx.strokeStyle = '#2b341c';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 88, 55, 16, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    const bowlBodyGrad = ctx.createLinearGradient(cx - 145, cy, cx + 145, cy + 90);
+    bowlBodyGrad.addColorStop(0, '#1c2215');
+    bowlBodyGrad.addColorStop(0.35, '#28331a');
+    bowlBodyGrad.addColorStop(0.7, '#151a10');
+    bowlBodyGrad.addColorStop(1, '#0e110a');
+
+    ctx.fillStyle = bowlBodyGrad;
+    ctx.strokeStyle = '#384622';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx - 142, cy - 14);
+    ctx.bezierCurveTo(cx - 140, cy + 50, cx - 85, cy + 86, cx - 52, cy + 86);
+    ctx.ellipse(cx, cy + 86, 52, 15, 0, Math.PI, 0, true);
+    ctx.bezierCurveTo(cx + 85, cy + 86, cx + 140, cy + 50, cx + 142, cy - 14);
+    ctx.ellipse(cx, cy - 14, 142, 54, 0, 0, Math.PI, true);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    const innerCavityGrad = ctx.createRadialGradient(cx, cy - 14, 30, cx, cy - 14, 138);
+    innerCavityGrad.addColorStop(0, '#3d4e22');
+    innerCavityGrad.addColorStop(0.5, '#222c15');
+    innerCavityGrad.addColorStop(1, '#11150c');
+    ctx.fillStyle = innerCavityGrad;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - 14, 138, 51, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 3. Sweet Golden Syrup (Chashni) pool
+    ctx.save();
+    const syrupY = cy - 6;
+    const syrupRx = 126;
+    const syrupRy = 45;
+    const syrupGrad = ctx.createRadialGradient(cx - 20, syrupY - 8, 15, cx, syrupY, syrupRx);
+    syrupGrad.addColorStop(0, '#fae6a6');
+    syrupGrad.addColorStop(0.35, '#e0a133');
+    syrupGrad.addColorStop(0.7, '#b36f16');
+    syrupGrad.addColorStop(1, '#7a4205');
+    ctx.fillStyle = syrupGrad;
+    ctx.beginPath();
+    ctx.ellipse(cx, syrupY, syrupRx, syrupRy, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255, 245, 200, 0.45)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.ellipse(cx - 6, syrupY - 4, syrupRx * 0.85, syrupRy * 0.82, -0.05, Math.PI * 0.75, Math.PI * 1.85);
+    ctx.stroke();
+    ctx.restore();
+
+    // 4. Project and sort the 7 Rosogollas (rotating on axis)
+    const projectedSweets = sweets.map((s, idx) => {
+      const rx = s.x * Math.cos(angle) - s.z * Math.sin(angle);
+      const rz = s.x * Math.sin(angle) + s.z * Math.cos(angle);
+      const ry = s.y + Math.sin(angle * 2.2 + idx) * 2.4;
+
+      const sx = cx + rx;
+      const sy = (cy - 14) + ry * Math.cos(pitch) + rz * Math.sin(pitch);
+      const rad = s.r * (1 + rz * 0.0015);
+      return { idx, sx, sy, rad, rz };
+    }).sort((a, b) => a.rz - b.rz);
+
+    // 5. Render each Rosogolla
+    projectedSweets.forEach(({ idx, sx, sy, rad }) => {
+      ctx.save();
+
+      // Contact shadow in syrup
+      ctx.fillStyle = 'rgba(85, 42, 6, 0.42)';
+      ctx.beginPath();
+      ctx.ellipse(sx, sy + rad * 0.52, rad * 0.88, rad * 0.42, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Spongy Spherical Body
+      const lightX = sx - rad * 0.36;
+      const lightY = sy - rad * 0.38;
+      const sweetGrad = ctx.createRadialGradient(lightX, lightY, rad * 0.06, sx, sy, rad);
+      sweetGrad.addColorStop(0, '#ffffff');
+      sweetGrad.addColorStop(0.16, '#fffef8');
+      sweetGrad.addColorStop(0.52, '#fcf5e5');
+      sweetGrad.addColorStop(0.82, '#eedbc2');
+      sweetGrad.addColorStop(1, '#d8bc92');
+
+      ctx.fillStyle = sweetGrad;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.28)';
+      ctx.shadowBlur = 8;
+      ctx.shadowOffsetY = 4;
+      ctx.beginPath();
+      ctx.arc(sx, sy, rad, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
+
+      // Texture pores
+      ctx.fillStyle = 'rgba(185, 150, 110, 0.38)';
+      pores[idx].forEach(p => {
+        const px = sx + p.dx * Math.cos(angle) - p.dy * Math.sin(angle) * 0.3;
+        const py = sy + p.dx * Math.sin(angle) * 0.3 + p.dy;
+        ctx.beginPath();
+        ctx.arc(px, py, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Saffron garnish (kesar)
+      const garnishAngle = angle + idx * 0.9;
+      const gx = sx + Math.cos(garnishAngle) * (rad * 0.2);
+      const gy = sy - rad * 0.25 + Math.sin(garnishAngle) * (rad * 0.15);
+
+      ctx.strokeStyle = '#d63b00';
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(gx - 4, gy - 2);
+      ctx.quadraticCurveTo(gx + 2, gy - 7, gx + 6, gy + 1);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#e67300';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(gx - 2, gy + 3);
+      ctx.quadraticCurveTo(gx + 3, gy + 7, gx + 8, gy + 4);
+      ctx.stroke();
+
+      // Pistachio specks
+      ctx.fillStyle = '#99cc33';
+      ctx.beginPath();
+      ctx.arc(gx + 2, gy - 3, 1.4, 0, Math.PI * 2);
+      ctx.arc(gx - 5, gy + 4, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#66991a';
+      ctx.beginPath();
+      ctx.arc(gx + 5, gy + 2, 1.3, 0, Math.PI * 2);
+      ctx.arc(gx - 3, gy - 5, 1.0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Liquid specular drop
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.beginPath();
+      ctx.ellipse(lightX, lightY, rad * 0.16, rad * 0.1, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    });
+
+    // 6. Front Lip of the Ceramic Bowl
+    ctx.save();
+    const frontRimGrad = ctx.createLinearGradient(cx - 142, cy - 14, cx + 142, cy + 30);
+    frontRimGrad.addColorStop(0, '#1f2617');
+    frontRimGrad.addColorStop(0.4, '#2d381c');
+    frontRimGrad.addColorStop(0.7, '#1f2617');
+    frontRimGrad.addColorStop(1, '#11150c');
+
+    ctx.fillStyle = frontRimGrad;
+    ctx.strokeStyle = '#3e4d25';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx - 142, cy - 14);
+    ctx.ellipse(cx, cy - 14, 142, 54, 0, Math.PI, 0, true);
+    ctx.bezierCurveTo(cx + 130, cy + 18, cx + 60, cy + 42, cx, cy + 44);
+    ctx.bezierCurveTo(cx - 60, cy + 42, cx - 130, cy + 18, cx - 142, cy - 14);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Top rim lime specular highlight
+    ctx.strokeStyle = 'rgba(208, 243, 68, 0.65)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - 14, 140, 52, 0, Math.PI * 0.08, Math.PI * 0.92, false);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - 12, 137, 50, 0, Math.PI * 0.12, Math.PI * 0.88, false);
+    ctx.stroke();
+
+    // 7. Rotating Axis Marker
+    ctx.setLineDash([4, 6]);
+    ctx.strokeStyle = 'rgba(208, 243, 68, 0.28)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 96, 75, 24, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.restore();
+
+    requestAnimationFrame(draw);
+  }
+
+  requestAnimationFrame(draw);
+}
 function transcriptFor(chat) {
   return ['# '+chat.title,'',...chat.messages.flatMap(message=>[
     '## '+(message.role==='user'?'You':'Rosogolla')+(message.voice?' · Live voice':''),'',message.text,
@@ -548,3 +894,5 @@ function connectLive(stage,orb,status,caption) {
 }
 fetch('/api/config').then(response=>response.json()).then(data=>{config=data;render();}).catch(()=>{});
 render();
+setupIntroOverlay();
+setupRosogollaBowl();

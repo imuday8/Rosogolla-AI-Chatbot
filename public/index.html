@@ -31,9 +31,9 @@
       <div class="hero-copy"><div class="eyebrow"><span data-icon="spark"></span> YOUR AI WORKSPACE</div>
         <h1>What’s on<br>your <em>mind?</em></h1>
         <p>Think it through, make something new, or just talk. Rosogolla is here for it.</p>
-        <div class="hero-actions"><button id="hero-live" class="hero-primary"><span data-icon="wave"></span> Start live voice</button><button id="intro" class="intro"><span data-icon="play"></span> Watch intro</button></div>
+        <div class="hero-actions"><button id="hero-live" class="hero-primary"><span data-icon="wave"></span> Start live voice</button></div>
       </div>
-      <div class="hero-art" aria-hidden="true"><div class="orbit"><div class="orb"></div></div></div>
+      <div class="hero-art" aria-label="A bowl of fresh rosogollas rotating in its axis"><div class="bowl-stage"><canvas id="rosogolla-bowl" width="400" height="400" aria-label="3D animated bowl of rosogolla rotating on its axis"></canvas><div class="bowl-axis-halo" aria-hidden="true"></div></div></div>
     </div>
     <div class="suggestions"><div class="section-label">START WITH AN IDEA</div><div class="cards">
       <button data-prompt="Help me brainstorm a few fresh ideas for "><span class="card-icon" data-icon="bulb"></span><strong>Brainstorm ideas</strong><small>Find a fresh angle</small></button>
@@ -53,4 +53,34 @@
 </div>
 <dialog id="modal" aria-labelledby="modal-title"><div class="modal-top"><h2 id="modal-title"></h2><button id="close-modal" class="icon-button" data-icon="close" aria-label="Close dialog"></button></div><div id="modal-content"></div></dialog>
 <div id="toast" role="status" hidden></div>
+<div id="intro-overlay" class="intro-overlay" role="dialog" aria-modal="true" aria-label="Rosogolla Introduction">
+  <div class="intro-backdrop"></div>
+  <div class="intro-container">
+    <div class="intro-topbar">
+      <div class="intro-brand">
+        <img class="brand-logo" src="/rosogolla.svg" width="28" height="28" alt="">
+        <span>Rosogolla</span>
+      </div>
+      <div class="intro-actions">
+        <button type="button" id="intro-mute" class="intro-pill" aria-label="Toggle mute">
+          <span id="intro-mute-icon" data-icon="activity"></span>
+          <span id="intro-mute-text">Sound on</span>
+        </button>
+        <button type="button" id="intro-skip" class="intro-pill intro-skip-pill" aria-label="Skip introduction">
+          <span>Skip</span>
+          <span data-icon="close"></span>
+        </button>
+      </div>
+    </div>
+    <div class="intro-media">
+      <video id="intro-video" src="/intro.mp4?v=2" playsinline autoplay muted></video>
+      <div class="intro-corner-glow" aria-hidden="true"></div>
+    </div>
+    <div class="intro-bottom">
+      <div class="intro-progress-track">
+        <div id="intro-progress-fill" class="intro-progress-bar"></div>
+      </div>
+    </div>
+  </div>
+</div>
 </body></html>

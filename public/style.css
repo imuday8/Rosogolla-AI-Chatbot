@@ -102,3 +102,185 @@ dialog[data-view="voice"] .modal-top {margin-bottom:0}
 .request-error a{display:inline-block;margin:10px 9px 0 0}
 .brand {font-size:clamp(17px,2.15vw,23px);letter-spacing:.015em;white-space:nowrap}
 .brand-logo {width:34px;height:34px;flex:none}
+
+
+/* Rotating Rosogolla Bowl */
+.bowl-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(88%, 350px);
+  aspect-ratio: 1;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.bowl-stage:active {
+  cursor: grabbing;
+}
+#rosogolla-bowl {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 14px 30px rgba(0, 0, 0, 0.72));
+  transition: transform 0.25s ease-out;
+}
+.bowl-stage:hover #rosogolla-bowl {
+  transform: scale(1.02);
+}
+.bowl-axis-halo {
+  position: absolute;
+  inset: 10% 6%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(208, 243, 68, 0.12) 0%, transparent 68%);
+  pointer-events: none;
+  z-index: -1;
+  animation: halo-pulse 4s ease-in-out infinite alternate;
+}
+@keyframes halo-pulse {
+  0% { transform: scale(0.96); opacity: 0.6; }
+  100% { transform: scale(1.04); opacity: 1; }
+}
+
+/* Startup Intro Video Overlay */
+.intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(14px, 3.5vw, 30px);
+  background: rgba(8, 9, 8, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  opacity: 1;
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.45s ease;
+}
+.intro-overlay.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+.intro-backdrop {
+  position: absolute;
+  inset: 0;
+}
+.intro-container {
+  position: relative;
+  z-index: 2;
+  width: min(94vw, 720px);
+  background: #11140e;
+  border: 1px solid #333c26;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.88), 0 0 50px rgba(208, 243, 68, 0.12);
+  display: flex;
+  flex-direction: column;
+  animation: introPop 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes introPop {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.intro-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 18px;
+  background: #151a11;
+  border-bottom: 1px solid #2b3320;
+}
+.intro-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--serif);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text);
+}
+.intro-brand .brand-logo {
+  border-radius: 7px;
+}
+.intro-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.intro-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #1a2214;
+  border: 1px solid #364223;
+  color: var(--soft);
+  padding: 6px 12px;
+  border-radius: 7px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.intro-pill:hover {
+  background: #252e1c;
+  color: var(--text);
+  border-color: var(--accent);
+}
+.intro-skip-pill {
+  background: var(--accent);
+  color: #111508;
+  border-color: var(--accent);
+  font-weight: 700;
+}
+.intro-skip-pill:hover {
+  background: #e3ff81;
+  color: #111508;
+}
+.intro-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #090a08;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.intro-media video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.intro-corner-glow {
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 45px rgba(0, 0, 0, 0.65);
+  pointer-events: none;
+}
+.intro-bottom {
+  background: #151a11;
+  padding: 10px 18px 12px;
+  border-top: 1px solid #242c1b;
+}
+.intro-progress-track {
+  width: 100%;
+  height: 4px;
+  background: #222919;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.intro-progress-bar {
+  width: 0%;
+  height: 100%;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  transition: width 0.1s linear;
+}
+
+@media(max-width:630px) {
+  .hero-art .bowl-stage {
+    width: 96%;
+    transform: translate(6%, -6%);
+  }
+}
