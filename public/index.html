@@ -1,11 +1,11 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#151510">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#090a08">
 <title>USION — A space for your curiosity</title>
 <meta name="description" content="A Gemini-powered workspace for ideas, documents and live conversations.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script>
 </head>
 <body>
@@ -28,11 +28,11 @@
   <section id="welcome">
     <div class="hero">
       <div class="hero-copy"><div class="eyebrow"><span data-icon="spark"></span> YOUR AI WORKSPACE</div>
-        <h1>What's on<br>your <em>mind?</em></h1>
+        <h1>What’s on<br>your <em>mind?</em></h1>
         <p>Think it through, make something new, or just talk. USION is here for it.</p>
-        <button id="intro" class="intro"><span data-icon="play"></span> Watch intro <span class="duration">0:08</span></button>
+        <div class="hero-actions"><button id="hero-live" class="hero-primary"><span data-icon="wave"></span> Start live voice</button><button id="intro" class="intro"><span data-icon="play"></span> Watch intro</button></div>
       </div>
-      <div class="hero-art" aria-hidden="true"></div>
+      <div class="hero-art" aria-hidden="true"><div class="orbit"><div class="orb"></div></div></div>
     </div>
     <div class="suggestions"><div class="section-label">START WITH AN IDEA</div><div class="cards">
       <button data-prompt="Help me brainstorm a few fresh ideas for "><span class="card-icon" data-icon="bulb"></span><strong>Brainstorm ideas</strong><small>Find a fresh angle</small></button>

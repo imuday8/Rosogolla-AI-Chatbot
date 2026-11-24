@@ -1,6 +1,6 @@
 # USION
 
-USION is a Gemini chat and live voice workspace with a bronze palette, an original motion intro, and local chat history.
+USION is a Gemini chat and live voice workspace with a black-and-lime palette and an audio-reactive orb, an original motion intro, and local chat history.
 
 ## Run locally
 

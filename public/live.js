@@ -13,7 +13,12 @@ function formatSamples(samples,sampleRate){
   }
   return btoa(String.fromCharCode(...bytes));
 }
-export function startLive({authorize,onStatus,onTurn,onEnd}){
+function audioLevel(samples) {
+  let energy=0;
+  for (const value of samples) energy+=value*value;
+  return Math.min(1,Math.sqrt(energy/Math.max(1,samples.length))*6);
+}
+export function startLive({authorize,onStatus,onTurn,onEnd,onActivity=()=>{},onCaption=()=>{}}){
   let socket,context,stream,microphone,processor;
   let ended=false, ready=false, nextTime=0, timeout;
   let input='',output='',usage=null;
@@ -53,10 +58,15 @@ export function startLive({authorize,onStatus,onTurn,onEnd}){
     const source=context.createBufferSource();
     source.buffer=buffer;
     source.connect(context.destination);
-    source.onended=()=>{playing.delete(source);source.disconnect();};
+    source.onended=()=>{
+      playing.delete(source);
+      source.disconnect();
+      if(!ended&&!playing.size)onActivity('listening',0);
+    };
     playing.add(source);
     nextTime=Math.max(context.currentTime+.015,nextTime);
     source.start(nextTime);
+    onActivity('speaking',audioLevel(samples));
     nextTime+=buffer.duration;
   }
   async function connect(){
@@ -92,7 +102,9 @@ export function startLive({authorize,onStatus,onTurn,onEnd}){
           processor.connect(context.destination);
           processor.onaudioprocess=event=>{
             if(ended||socket.readyState!==WebSocket.OPEN||socket.bufferedAmount>300000)return;
-            const data=formatSamples(event.inputBuffer.getChannelData(0),context.sampleRate);
+            const samples=event.inputBuffer.getChannelData(0);
+            if(!playing.size)onActivity('listening',audioLevel(samples));
+            const data=formatSamples(samples,context.sampleRate);
             socket.send(JSON.stringify({realtimeInput:{audio:{data,mimeType:'audio/pcm;rate=16000'}}}));
           };
           onStatus('Listening. Speak naturally or interrupt USION at any time.',true);
@@ -101,8 +113,14 @@ export function startLive({authorize,onStatus,onTurn,onEnd}){
         const content=message.serverContent;
         if(content){
           if(content.interrupted)interrupt();
-          if(content.inputTranscription?.text)input+=content.inputTranscription.text;
-          if(content.outputTranscription?.text)output+=content.outputTranscription.text;
+          if(content.inputTranscription?.text){
+            input+=content.inputTranscription.text;
+            if(!output)onCaption(input.trim());
+          }
+          if(content.outputTranscription?.text){
+            output+=content.outputTranscription.text;
+            onCaption(output.trim());
+          }
           for(const part of content.modelTurn?.parts||[]){
             if(part.inlineData?.mimeType?.startsWith('audio/pcm'))play(part.inlineData);
           }

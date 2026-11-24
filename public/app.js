@@ -86,6 +86,7 @@ async function api(path,body={},apiKey=key) {
   return data;
 }
 function openDialog(title,...content) {
+  delete $('modal').dataset.view;
   $('modal-title').textContent=title;
   $('modal-content').replaceChildren(...content);
   if (!$('modal').open) $('modal').showModal();
@@ -261,11 +262,18 @@ $('menu').onclick=()=>{$('menu').setAttribute('aria-expanded',$('sidebar').class
 $('scroll').addEventListener('scroll',()=>$('navigation').classList.toggle('scrolled',$('scroll').scrollTop>3),{passive:true});
 $('usage').onclick=()=>{
   const usage=usageFor(getChat());
-  const grid=node('div','','stats');
-  for(const [label,value] of [['Input',usage.input],['Output',usage.output],['Thinking',usage.thinking],['Total',usage.total]]) {
-    grid.append(node('span',label),node('strong',number(value)));
+  const chart=node('div','','usage-chart');
+  const maximum=Math.max(1,usage.input,usage.output,usage.thinking);
+  for(const [label,value] of [['Input',usage.input],['Output',usage.output],['Thinking',usage.thinking]]) {
+    const row=node('div','','usage-line');
+    const meter=node('meter');
+    meter.max=maximum;meter.value=value;meter.setAttribute('aria-label',label+' tokens');
+    row.append(node('span',label),meter,node('strong',number(value)));
+    chart.append(row);
   }
-  openDialog('Token usage',node('p','Gemini-reported usage across this conversation. Input includes conversation context sent on each request.','dialog-copy'),grid);
+  const total=node('div','','usage-total');
+  total.append(node('span','Total'),node('strong',number(usage.total)+' tokens'));
+  openDialog('Token usage',node('p','Gemini-reported usage for this conversation. Input includes context sent with each request.','dialog-copy'),chart,total);
 };
 $('intro').onclick=()=>{
   const video=node('video');
@@ -494,20 +502,45 @@ $('account').onclick=async()=>{
     google.accounts.id.renderButton(container,{theme:'filled_black',size:'large',text:'signin_with'});
   }catch{status.textContent='Google sign-in could not load.';}
 };
-$('live').onclick=()=>{
+function showLive() {
   if(activeLive)return;
-  if(!key&&!config.hasServerKey){settings();return;}
-  if(pending){toast('Wait for the current response before starting live voice.');return;}
-  recording?.stop();
-  const pulse=node('div','','pulse');pulse.append(icon('wave'));
-  const status=node('p','Connecting to Gemini and requesting microphone access…','dialog-copy');
+  const stage=node('div','','voice-stage');
+  const orbit=node('div','','orbit');
+  orbit.setAttribute('aria-hidden','true');
+  const orb=node('div','','orb');
+  orbit.append(orb);
+  const status=node('p','Speak with USION in real time.','dialog-copy voice-status');
   status.setAttribute('role','status');
-  const stop=action('End session',()=>$('modal').close(),'dialog-action');
-  openDialog('Live with USION',pulse,status,stop);
+  const caption=node('p','','voice-caption');
+  caption.hidden=true;
+  const start=action('Start conversation',()=>{
+    if(!key&&!config.hasServerKey){settings();return;}
+    if(pending){toast('Wait for the current response before starting live voice.');return;}
+    recording?.stop();
+    status.textContent='Connecting to Gemini and requesting microphone access…';
+    stage.dataset.state='connecting';
+    caption.hidden=false;
+    start.replaceWith(action('End session',()=>$('modal').close(),'dialog-action'));
+    connectLive(stage,orb,status,caption);
+  },'dialog-action');
+  stage.append(orbit,status,caption,start);
+  openDialog('Live with USION',stage);
+  $('modal').dataset.view='voice';
+}
+$('hero-live').onclick=$('live').onclick=showLive;
+function connectLive(stage,orb,status,caption) {
   let chat=getChat();
   const control=startLive({
     authorize:()=>api('live'),
-    onStatus:(text,connected)=>{status.textContent=text;pulse.classList.toggle('active',connected);},
+    onStatus:(text,connected)=>{
+      status.textContent=text;
+      stage.dataset.state=connected?'listening':'ended';
+    },
+    onActivity:(state,level)=>{
+      stage.dataset.state=state;
+      orb.style.setProperty('--level',String(level));
+    },
+    onCaption:(text)=>{caption.textContent=text;caption.scrollTop=caption.scrollHeight;},
     onTurn:({input,output,usage})=>{
       if(!input&&!output&&!usage)return;
       chat??=createChat('Live voice');
@@ -518,6 +551,6 @@ $('live').onclick=()=>{
     onEnd:()=>{if(activeLive===control)activeLive=null;}
   });
   activeLive=control;
-};
+}
 fetch('/api/config').then(response=>response.json()).then(data=>{config=data;render();}).catch(()=>{});
 render();
