@@ -55,7 +55,6 @@ let chats = restoreChats(profile?.id);
 let current = chats[0]?.id || null;
 let config = {model:'gemini-3.8-flash',liveModel:'gemini-3.8-live'};
 let projectBlocked = false;
-let generationVerified = false;
 let temperature = 2;
 let files = [];
 let pending = false;
@@ -227,8 +226,6 @@ function render(bottom=false) {
   }
   if (!chats.length) $('history').append(node('p','Your chats will appear here.','empty-history'));
   $('token-count').textContent=number(usageFor(chat).total)+' tokens';
-  $('connect').classList.toggle('ready',generationVerified&&!projectBlocked);
-  $('connection-label').textContent=projectBlocked?'Gemini access blocked':generationVerified?'Gemini connected':config.hasServerKey?'Gemini ready':'Gemini setup pending';
   $('account-name').textContent=profile?.name||'Guest workspace';
   $('account-detail').textContent=profile?.email||'Sign in with Google';
   $('export').disabled=$('share').disabled=!chat?.messages.length;
@@ -245,7 +242,7 @@ function settings() {
   if(projectBlocked)openDialog('Settings',description,status,node('p','Google has blocked this site’s Gemini project. The site owner can check project access in Google AI Studio.','dialog-copy'));
   else openDialog('Settings',description,status);
 }
-$('settings').onclick=$('connect').onclick=settings;
+$('settings').onclick=settings;
 $('new').onclick=newChat;
 function closeSidebar() {
   $('sidebar').classList.remove('open');
@@ -345,7 +342,7 @@ async function sendChat(chat) {
     const result=await api('chat',{messages});
     chat.messages.push({role:'model',text:result.reply,usage:result.usage});
     temperature=result.temperature;
-    generationVerified=true;projectBlocked=false;
+    projectBlocked=false;
   } catch(error) {
     chat.failed={message:error.message,code:error.code};
     if(error.code==='GEMINI_PROJECT_UNAVAILABLE')projectBlocked=true;
