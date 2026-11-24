@@ -1227,10 +1227,14 @@ async function sendChat(chat) {
     pending=false;delete chat.pending;save();render(current===chat.id);
   }
 }
-$(send).onclick = (e) => {
-  e.preventDefault();
-  $(composer).requestSubmit();
-};
+const sendBtn = $('send');
+if (sendBtn) {
+  sendBtn.onclick = (e) => {
+    e.preventDefault();
+    const composer = $('composer');
+    if (composer) composer.requestSubmit();
+  };
+}
 $('composer').onsubmit=event=>{
   event.preventDefault();
   event.preventDefault();
