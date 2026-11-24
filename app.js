@@ -468,8 +468,9 @@ function setupIntroOverlay() {
   let animId = null;
   const startTime = performance.now();
   const heroImg = new Image();
-  heroImg.src = "./rosogolla-hero.png";
+  heroImg.src = "./rosogolla-hero.png?v=17";
   let heroLoaded = false;
+  if (heroImg.complete && heroImg.naturalWidth > 0) heroLoaded = true;
   heroImg.onload = () => { heroLoaded = true; };
   const INTRO_DURATION = 5500; // 5.5 seconds (5-6 seconds duration) // 6.8 seconds total intro
 
@@ -677,46 +678,24 @@ function setupIntroOverlay() {
 
     ctx.restore();
 
-    // 5. The Grand 3D Kinetic King Rosogolla Sweet
+    // 5. The Grand Authentic Rosogolla Photo
     ctx.save();
-    // Ambient drop shadow beneath the sweet
-    const sweetShadow = ctx.createRadialGradient(cx, cy + rad * 0.9, 10, cx, cy + rad * 0.9, rad * 1.55);
-    sweetShadow.addColorStop(0, 'rgba(0, 255, 0, 0.32)');
-    sweetShadow.addColorStop(0.4, 'rgba(0, 0, 0, 0.85)');
+    // Ambient natural drop shadow beneath the sweet
+    const sweetShadow = ctx.createRadialGradient(cx, cy + rad * 0.75, 10, cx, cy + rad * 0.75, rad * 1.3);
+    sweetShadow.addColorStop(0, 'rgba(0, 0, 0, 0.75)');
+    sweetShadow.addColorStop(0.5, 'rgba(0, 0, 0, 0.35)');
     sweetShadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = sweetShadow;
     ctx.beginPath();
-    ctx.ellipse(cx, cy + rad * 0.9, rad * 1.35, rad * 0.45, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + rad * 0.75, rad * 1.2, rad * 0.4, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    if (heroLoaded) {
-      // Draw the hyper-realistic 8K studio photograph of authentic Bengali Rosogolla
+    if (heroLoaded || (heroImg.complete && heroImg.naturalWidth > 0)) {
+      // Draw the real photo of authentic Bengali Rosogolla cleanly and realistically
       const drawSize = rad * 2.85;
       const drawX = cx - drawSize * 0.5;
       const drawY = cy - drawSize * 0.5;
-
-      ctx.save();
-      // Glowing neon lime rim aura
-      ctx.shadowColor = '#00ff00';
-      ctx.shadowBlur = 28;
       ctx.drawImage(heroImg, drawX, drawY, drawSize, drawSize);
-      ctx.restore();
-    } else {
-      // Fallback while decoding
-      const lightX = cx - rad * 0.32;
-      const lightY = cy - rad * 0.35;
-      const sweetGrad = ctx.createRadialGradient(lightX, lightY, rad * 0.06, cx, cy, rad * 1.05);
-      sweetGrad.addColorStop(0, '#ffffff');
-      sweetGrad.addColorStop(0.12, '#fffef6');
-      sweetGrad.addColorStop(0.46, '#fcf4e4');
-      sweetGrad.addColorStop(0.72, '#f3dcba');
-      sweetGrad.addColorStop(1, '#bc9052');
-      ctx.fillStyle = sweetGrad;
-      ctx.shadowColor = 'rgba(0, 255, 0, 0.4)';
-      ctx.shadowBlur = 32;
-      ctx.beginPath();
-      ctx.arc(cx, cy, rad, 0, Math.PI * 2);
-      ctx.fill();
     }
     ctx.restore();
 
