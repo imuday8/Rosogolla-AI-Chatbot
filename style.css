@@ -168,6 +168,12 @@ dialog[data-view="voice"] .modal-top {margin-bottom:0}
   filter: blur(14px);
   pointer-events: none;
 }
+.intro-overlay[hidden],
+.intro-overlay.fade-out[hidden] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
 .intro-canvas {
   position: absolute;
   inset: 0;

@@ -1,3 +1,8 @@
+import {startLive} from './live.js?v=2';
+
+const $ = id => document.getElementById(id);
+const load = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
+const tab = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
 let clientKey = load('rosogolla.openrouter_key', load('usion.openrouter_key', ''));
 
 async function callOpenRouterDirect(messages, model, key) {
@@ -60,9 +65,6 @@ async function callOpenRouterDirect(messages, model, key) {
   return { reply, usage, temperature: 1 };
 }
 
-import {startLive} from './live.js?v=2';
-
-const $ = id => document.getElementById(id);
 const icons = {
   spark:'<path d="M12 2v20M2 12h20M5 5l14 14M5 19 19 5"/>',
   plus:'<path d="M12 5v14M5 12h14"/>', search:'<circle cx="10.8" cy="10.8" r="6.5"/><path d="m16 16 4 4"/>',
@@ -102,8 +104,6 @@ function action(label, handler, className='') {
   button.onclick=handler;
   return button;
 }
-const load = (key,fallback) => {try {return JSON.parse(localStorage.getItem(key)) ?? fallback;} catch {return fallback;}};
-const tab = (key,fallback) => {try {return JSON.parse(sessionStorage.getItem(key)) ?? fallback;} catch {return fallback;}};
 let profile = tab('rosogolla.profile', tab('usion.profile', null));
 function restoreChats(id) {
   return (load('rosogolla.chats.'+(id||'guest'), null) || load('usion.chats.'+(id||'guest'), [])).map(chat=>{
@@ -450,9 +450,10 @@ function setupIntroOverlay() {
     if (window.rosogollaVoice) window.rosogollaVoice.play();
     setTimeout(() => {
       overlay.hidden = true;
+      overlay.style.display = 'none';
       if (animId) cancelAnimationFrame(animId);
       window.removeEventListener('resize', resize);
-    }, 650);
+    }, 550);
   }
 
   // Mouse Parallax
@@ -484,8 +485,17 @@ function setupIntroOverlay() {
     };
   }
 
-  if (skipBtn) skipBtn.onclick = (e) => { e.stopPropagation(); dismiss(); };
-  overlay.onclick = () => dismiss();
+  if (skipBtn) {
+    skipBtn.addEventListener('click', (e) => { e.stopPropagation(); dismiss(); });
+    skipBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
+  }
+  overlay.addEventListener('click', (e) => { dismiss(); });
+  overlay.addEventListener('pointerdown', (e) => {
+    // Only dismiss if not clicking controls
+    if (!e.target.closest('.intro-floating-header') && !e.target.closest('button')) {
+      dismiss();
+    }
+  });
   document.addEventListener('keydown', (e) => {
     if (!dismissed && (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ')) {
       dismiss();
