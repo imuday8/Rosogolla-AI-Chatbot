@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#090a08">
+<link rel="icon" type="image/svg+xml" href="./rosogolla.svg">
+<title>Rosogolla — A space for your curiosity</title>
+<meta name="description" content="An AI-powered workspace for ideas, documents and conversations.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./style.css?v=5"><script type="module" src="./app.js?v=8"></script>
+</head>
+<body>
+<div id="shell">
+<aside id="sidebar" aria-label="Workspace navigation">
+  <div class="brand"><img class="brand-logo" src="./rosogolla.svg" width="34" height="34" alt="">Rosogolla</div>
+  <button id="new" class="new"><span data-icon="plus"></span> New chat <kbd>⌥ N</kbd></button>
+  <button id="search" class="side-action"><span data-icon="search"></span> Search chats</button>
+  <section class="history"><h2>Chat history</h2><div id="history"></div></section>
+  <div class="sidebar-bottom">
+    <button id="share" class="side-action"><span data-icon="share"></span> Share conversation</button>
+    <button id="export" class="side-action"><span data-icon="download"></span> Export transcript</button>
+    <button id="settings" class="side-action"><span data-icon="settings"></span> Settings</button>
+    <button id="account" class="account"><span class="avatar" data-icon="user"></span><span><strong id="account-name">Guest workspace</strong><small id="account-detail">Sign in with Google</small></span><span data-icon="chevron"></span></button>
+  </div>
+</aside>
+<main>
+<header id="navigation"><div class="workspace"><button id="menu" class="icon-button" aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation" data-icon="menu"></button><span id="breadcrumb">Workspace</span></div><div class="header-actions"><button id="usage" class="pill"><span data-icon="activity"></span><span id="token-count">0 tokens</span></button></div></header>
+<div id="scroll" tabindex="0" aria-label="Conversation">
+  <section id="welcome">
+    <div class="hero">
+      <div class="hero-copy"><div class="eyebrow"><span data-icon="spark"></span> YOUR AI WORKSPACE</div>
+        <h1>What’s on<br>your <em>mind?</em></h1>
+        <p>Think it through, make something new, or just talk. Rosogolla is here for it.</p>
+        <div class="hero-actions"><button id="hero-live" class="hero-primary"><span data-icon="wave"></span> Start live voice</button></div>
+      </div>
+      <div class="hero-art" aria-label="A bowl of fresh rosogollas rotating in its axis"><div class="bowl-stage"><canvas id="rosogolla-bowl" width="400" height="400" aria-label="3D animated bowl of rosogolla rotating on its axis"></canvas><div class="bowl-axis-halo" aria-hidden="true"></div></div></div>
+    </div>
+    <div class="suggestions"><div class="section-label">START WITH AN IDEA</div><div class="cards">
+      <button data-prompt="Help me brainstorm a few fresh ideas for "><span class="card-icon" data-icon="bulb"></span><strong>Brainstorm ideas</strong><small>Find a fresh angle</small></button>
+      <button data-prompt="Help me write a polished first draft about "><span class="card-icon" data-icon="pen"></span><strong>Write something</strong><small>From thought to draft</small></button>
+      <button data-prompt="Explain this in plain language with a practical example: "><span class="card-icon" data-icon="book"></span><strong>Learn something</strong><small>Make the complex clear</small></button>
+      <button id="suggest-file"><span class="card-icon" data-icon="file"></span><strong>Explore a document</strong><small>Find what matters in a file</small></button>
+    </div></div>
+  </section>
+  <section id="conversation" hidden><div class="thread-top"><h1 id="thread-title"></h1><button id="find" class="pill" data-icon="search" aria-label="Find in conversation"></button></div><div id="findbar" hidden><input id="find-input" type="search" placeholder="Find words in this chat"><span id="find-count"></span><button id="prev" aria-label="Previous match">↑</button><button id="next" aria-label="Next match">↓</button><button id="close-find" aria-label="Close search">×</button></div><div id="messages"></div></section>
+</div>
+<div class="composer-region"><form id="composer">
+  <div id="attachments"></div>
+  <textarea id="prompt" rows="2" placeholder="Message Rosogolla..." aria-label="Message Rosogolla"></textarea>
+  <div class="composer-actions"><div><button type="button" id="attach" class="icon-button" data-icon="clip" aria-label="Attach a document" title="Attach a document"></button><button type="button" id="dictate" class="icon-button" data-icon="mic" aria-label="Dictate or say send message" title="Dictate or say “send message”"></button><input id="files" type="file" multiple accept=".pdf,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp" hidden></div><div><button type="button" id="live" class="live"><span data-icon="wave"></span> Live voice</button><button class="send" id="send" data-icon="send" aria-label="Send message" title="Send message"></button></div></div>
+</form><footer>Powered by OpenRouter <span>·</span> Creative mode <span>·</span> AI can make mistakes.</footer></div>
+</main>
+</div>
+<dialog id="modal" aria-labelledby="modal-title"><div class="modal-top"><h2 id="modal-title"></h2><button id="close-modal" class="icon-button" data-icon="close" aria-label="Close dialog"></button></div><div id="modal-content"></div></dialog>
+<div id="toast" role="status" hidden></div>
+<div id="intro-overlay" class="intro-overlay" role="dialog" aria-modal="true" aria-label="Rosogolla Introduction">
+  <div class="intro-backdrop"></div>
+  <div class="intro-container">
+    <div class="intro-topbar">
+      <div class="intro-brand">
+        <img class="brand-logo" src="./rosogolla.svg" width="28" height="28" alt="">
+        <span>Rosogolla</span>
+      </div>
+      <div class="intro-actions">
+        <button type="button" id="intro-mute" class="intro-pill" aria-label="Toggle mute">
+          <span id="intro-mute-icon" data-icon="activity"></span>
+          <span id="intro-mute-text">Sound on</span>
+        </button>
+        <button type="button" id="intro-skip" class="intro-pill intro-skip-pill" aria-label="Skip introduction">
+          <span>Skip</span>
+          <span data-icon="close"></span>
+        </button>
+      </div>
+    </div>
+    <div class="intro-media">
+      <video id="intro-video" src="./intro.mp4?v=2" playsinline autoplay muted></video>
+      <div class="intro-corner-glow" aria-hidden="true"></div>
+    </div>
+    <div class="intro-bottom">
+      <div class="intro-progress-track">
+        <div id="intro-progress-fill" class="intro-progress-bar"></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

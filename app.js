@@ -1,0 +1,1019 @@
+let clientKey = load('usion.openrouter_key', '');
+
+async function callOpenRouterDirect(messages, model, key) {
+  const openRouterMessages = [];
+  const mime = new Set(['application/pdf','image/png','image/jpeg','image/webp']);
+  for (const message of messages) {
+    const role = message.role === 'model' ? 'assistant' : 'user';
+    if (message.role === 'user' && message.files && message.files.length) {
+      const content = [];
+      if (message.text) content.push({type: 'text', text: message.text});
+      for (const file of message.files) {
+        if (file.mime === 'text/plain') {
+          content.push({type: 'text', text: 'Attached file: ' + String(file.name).slice(0, 150) + '\n' + file.data});
+        } else if (mime.has(file.mime)) {
+          content.push({type: 'image_url', image_url: {url: 'data:' + file.mime + ';base64,' + file.data}});
+        }
+      }
+      openRouterMessages.push({role, content});
+    } else {
+      if (message.text) openRouterMessages.push({role, content: message.text});
+    }
+  }
+
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + key,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': window.location.href,
+      'X-Title': 'Rosogolla'
+    },
+    body: JSON.stringify({
+      model: model || 'openrouter/free',
+      messages: [
+        {role: 'system', content: 'You are Rosogolla, a thoughtful, creative AI assistant. Respond in the language the user is speaking unless they request another language.'},
+        ...openRouterMessages
+      ],
+      temperature: 1
+    })
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    const msg = data.error?.message || data.error || 'OpenRouter error';
+    const err = new Error(msg);
+    if (response.status === 402) err.code = 'OPENROUTER_CREDITS_EXHAUSTED';
+    if (response.status === 401) err.code = 'OPENROUTER_AUTH_ERROR';
+    if (response.status === 429) err.code = 'OPENROUTER_RATE_LIMITED';
+    throw err;
+  }
+  const choice = data.choices?.[0];
+  const reply = choice?.message?.content || '';
+  const rawUsage = data.usage;
+  const usage = rawUsage ? {
+    promptTokenCount: rawUsage.prompt_tokens ?? 0,
+    candidatesTokenCount: rawUsage.completion_tokens ?? 0,
+    thoughtsTokenCount: 0,
+    totalTokenCount: rawUsage.total_tokens ?? 0
+  } : null;
+  return { reply, usage, temperature: 1 };
+}
+
+import {startLive} from './live.js?v=2';
+
+const $ = id => document.getElementById(id);
+const icons = {
+  spark:'<path d="M12 2v20M2 12h20M5 5l14 14M5 19 19 5"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>', search:'<circle cx="10.8" cy="10.8" r="6.5"/><path d="m16 16 4 4"/>',
+  share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m9 10 6-3m-6 7 6 3"/>',
+  download:'<path d="M12 3v12m-4-4 4 4 4-4M4 16v4h16v-4"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="m9 3-.6 2.5-2 .9L4 5.7 2 9l1.8 1.7v2.6L2 15l2 3.3 2.4-.7 2 .9L9 21h6l.6-2.5 2-.9 2.4.7 2-3.3-1.8-1.7v-2.6L22 9l-2-3.3-2.4.7-2-.9L15 3z"/>',
+  user:'<circle cx="12" cy="8" r="3"/><path d="M5 20v-2a7 7 0 0 1 14 0v2"/>',
+  chevron:'<path d="m9 6 6 6-6 6"/>',menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',
+  activity:'<path d="M3 14h4l3-8 4 12 3-6h4"/>',play:'<path d="m8 5 12 7-12 7z"/>',
+  bulb:'<path d="M8 16c0-2-3-3-3-7a7 7 0 1 1 14 0c0 4-3 5-3 7m-8 1h8m-7 3h6"/>',
+  pen:'<path d="m4 15 12-12 5 5L9 20l-6 1zm10-10 5 5"/>',
+  book:'<path d="M12 5v16M3 4h5a4 4 0 0 1 4 2 4 4 0 0 1 4-2h5v14h-5a4 4 0 0 0-4 2 4 4 0 0 0-4-2H3z"/>',
+  file:'<path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/>',
+  clip:'<path d="M8 13l6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l8-8m-4 12 7-7"/>',
+  mic:'<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0m-7 7v4m-3 0h6"/>',
+  wave:'<path d="M3 10v4m4-7v10m5-14v18m5-14v10m4-7v4"/>',send:'<path d="M12 20V4m-6 6 6-6 6 6"/>',close:'<path d="m6 6 12 12M18 6 6 18"/>',
+  chat:'<path d="M20 11a8 8 0 0 1-8 8H5l1.5-3A8 8 0 1 1 20 11Z"/>',
+  copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 4H6a2 2 0 0 0-2 2v10"/>'
+};
+function icon(name) {
+  const node = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  node.setAttribute('viewBox','0 0 24 24');
+  node.setAttribute('aria-hidden','true');
+  node.innerHTML = icons[name];
+  return node;
+}
+document.querySelectorAll('[data-icon]').forEach(element=>element.append(icon(element.dataset.icon)));
+function node(tag,text='',className='') {
+  const element=document.createElement(tag);
+  if (text) element.textContent=text;
+  if (className) element.className=className;
+  return element;
+}
+function action(label, handler, className='') {
+  const button=node('button',label,className);
+  button.type='button';
+  button.onclick=handler;
+  return button;
+}
+const load = (key,fallback) => {try {return JSON.parse(localStorage.getItem(key)) ?? fallback;} catch {return fallback;}};
+const tab = (key,fallback) => {try {return JSON.parse(sessionStorage.getItem(key)) ?? fallback;} catch {return fallback;}};
+let profile = tab('usion.profile',null);
+function restoreChats(id) {
+  return load('usion.chats.'+(id||'guest'),[]).map(chat=>{
+    delete chat.pending;
+    const last=chat.messages.at(-1);
+    if(last?.role==='user'&&!last.voice)chat.failed ||= true;
+    return chat;
+  });
+}
+let chats = restoreChats(profile?.id);
+let current = null;
+let config = {model:'openrouter/free',liveModel:'',liveVoiceEnabled:false};
+let projectBlocked = false;
+let temperature = 2;
+let files = [];
+let pending = false;
+let readingFiles = false;
+let activeLive;
+let recording;
+let match = 0;
+let toastTimer;
+const fileCache = new Map();
+const number = value => (value??0).toLocaleString();
+const getChat = () => chats.find(chat=>chat.id === current);
+const archiveKey = () => 'usion.chats.'+(profile?.id||'guest');
+const save = () => {
+  try {localStorage.setItem(archiveKey(),JSON.stringify(chats));}
+  catch {toast('This browser could not save the chat history. Export a transcript to keep it.');}
+};
+function toast(text) {
+  $('toast').textContent=text;
+  $('toast').hidden=false;
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>$('toast').hidden=true,5500);
+}
+async function api(path,body={}) {
+  const headers={'Content-Type':'application/json'};
+  const response=await fetch('./api/'+path,{method:'POST',headers,body:JSON.stringify(body)});
+  const data=await response.json().catch(()=>({}));
+  if (!response.ok) {
+    const error=new Error(data.error||'The service is unavailable.');
+    error.code=data.code;
+    throw error;
+  }
+  return data;
+}
+function openDialog(title,...content) {
+  delete $('modal').dataset.view;
+  $('modal-title').textContent=title;
+  $('modal-content').replaceChildren(...content);
+  if (!$('modal').open) $('modal').showModal();
+}
+$('close-modal').onclick=()=>$('modal').close();
+$('modal').addEventListener('close',()=>{
+  $('modal-content').querySelector('video')?.pause();
+  if (activeLive) activeLive.stop();
+});
+function newChat() {
+  if (activeLive) activeLive.stop();
+  current=null;
+  files=[];
+  $('prompt').value='';
+  $('findbar').hidden=true;
+  $('find-input').value='';
+  closeSidebar();
+  render();
+  $('prompt').focus();
+}
+function choose(id) {
+  if (activeLive) activeLive.stop();
+  current=id;
+  $('findbar').hidden=true;
+  $('find-input').value='';
+  closeSidebar();
+  render(true);
+}
+function createChat(title) {
+  const chat={id:crypto.randomUUID(),title:title.slice(0,85),messages:[]};
+  chats.unshift(chat);
+  current=chat.id;
+  return chat;
+}
+function usageFor(chat) {
+  const usage={input:0,output:0,thinking:0,total:0};
+  for (const {usage:u} of chat?.messages||[]) {
+    if (!u) continue;
+    usage.input+=u.promptTokenCount??0;
+    usage.output+=u.candidatesTokenCount??u.responseTokenCount??0;
+    usage.thinking+=u.thoughtsTokenCount??0;
+    usage.total+=u.totalTokenCount??0;
+  }
+  return usage;
+}
+function appendInline(parent,text) {
+  const emphasis = /(`[^`\n]+`|\*\*[^*\n]+\*\*)/g;
+  let last=0;
+  for(const item of text.matchAll(emphasis)) {
+    parent.append(text.slice(last,item.index));
+    const code=item[0].startsWith('`');
+    parent.append(node(code?'code':'strong',item[0].slice(code?1:2,code?-1:-2)));
+    last=item.index+item[0].length;
+  }
+  parent.append(text.slice(last));
+}
+function format(parent,text) {
+  for (const [index,block] of text.split(/```/).entries()) {
+    if (index%2) {
+      const pre=node('pre');
+      pre.append(node('code',block.replace(/^[\w+-]*\n/,'').trimEnd()));
+      parent.append(pre);
+      continue;
+    }
+    let list;
+    for (const line of block.split('\n')) {
+      const heading=line.match(/^(#{1,4})\s+(.*)$/);
+      const bullet=line.match(/^(?:[-*]|\d+\.)\s+(.*)$/);
+      if (!bullet) list=null;
+      if (!line.trim()) continue;
+      if (bullet) {
+        const kind=/^\d/.test(line)?'ol':'ul';
+        if (list?.localName !== kind) {list=node(kind);parent.append(list);}
+        const item=node('li');appendInline(item,bullet[1]);list.append(item);
+      } else {
+        const item=node(heading?'h'+Math.min(heading[1].length+1,5):'p');
+        appendInline(item,heading?.[2]??line);
+        parent.append(item);
+      }
+    }
+  }
+}
+function renderMessages(chat) {
+  const messages=$('messages');
+  messages.replaceChildren();
+  for(const message of chat?.messages||[]) {
+    const article=node('article','', 'message '+message.role);
+    article.append(node('div',message.role==='user'?'You':'Rosogolla','who'));
+    const body=node('div','','message-body');
+    if (message.role==='model') format(body,message.text);
+    else body.textContent=message.text;
+    article.append(body);
+    const meta=node('div','','message-meta');
+    if (message.voice) meta.append(node('span','Live voice'));
+    for (const name of message.names||[]) {
+      const chip=node('span','','chip');
+      chip.append(icon('file'),name);
+      meta.append(chip);
+    }
+    if(message.usage) meta.append(node('span',number(message.usage.totalTokenCount)+' tokens'));
+    if(message.text) {
+      const copy=action('',async()=>{try {await navigator.clipboard.writeText(message.text);toast('Message copied.');} catch {toast('Clipboard access is unavailable.');}});
+      copy.setAttribute('aria-label','Copy message');copy.title='Copy message';copy.append(icon('copy'));
+      meta.append(copy);
+    }
+    if(meta.childNodes.length) article.append(meta);
+    messages.append(article);
+  }
+  if (chat?.failed && !chat.pending) {
+    const notice=node('div','','request-error');
+    const failure=typeof chat.failed==='object'?chat.failed:null;
+    if(failure)notice.append(node('p',failure.message,'dialog-copy'));
+    if(failure?.code==='OPENROUTER_CREDITS_EXHAUSTED'||failure?.code==='OPENROUTER_AUTH_ERROR'){
+      notice.append(action('Gemini settings',settings,'dialog-action'));
+    }
+    notice.append(action('Retry message',()=>sendChat(chat),'dialog-action'));
+    messages.append(notice);
+  }
+  if (chat?.pending) messages.append(node('p','Rosogolla is thinking…','dialog-copy'));
+  highlight();
+}
+function render(bottom=false) {
+  const chat=getChat();
+  $('welcome').hidden=!!chat;
+  $('conversation').hidden=!chat;
+  $('breadcrumb').textContent=chat?.title||'Workspace';
+  $('thread-title').textContent=chat?.title||'';
+  $('history').replaceChildren();
+  for (const item of chats) {
+    const row=action('',()=>choose(item.id));
+    row.append(icon('chat'),node('span',item.title));
+    if (item.id===current) row.setAttribute('aria-current','true');
+    $('history').append(row);
+  }
+  if (!chats.length) $('history').append(node('p','Your chats will appear here.','empty-history'));
+  $('token-count').textContent=number(usageFor(chat).total)+' tokens';
+  $('account-name').textContent=profile?.name||'Guest workspace';
+  $('account-detail').textContent=profile?.email||'Sign in with Google';
+  $('export').disabled=$('share').disabled=!chat?.messages.length;
+  $('send').disabled=pending||readingFiles;
+  renderAttachments();
+  renderMessages(chat);
+  if (bottom) $('scroll').scrollTop=$('scroll').scrollHeight;
+}
+function settings() {
+  const elements = [];
+  if (config.hasServerKey && !config.isStatic) {
+    elements.push(node('p', 'This site uses its server’s OpenRouter connection. You can chat without entering an API key.', 'dialog-copy'));
+    elements.push(node('p', config.model + ' · Temperature ' + temperature, 'dialog-copy'));
+  } else {
+    elements.push(node('p', 'This site is running on GitHub Pages (static mode). Enter your OpenRouter API key below to chat. It is stored securely in your browser.', 'dialog-copy'));
+    const keyField = node('div', '', 'field');
+    const keyLabel = node('label', 'OpenRouter API Key');
+    const keyInput = node('input');
+    keyInput.type = 'password';
+    keyInput.placeholder = 'sk-or-v1-...';
+    keyInput.value = clientKey;
+    keyField.append(keyLabel, keyInput);
+    elements.push(keyField);
+
+    const modelField = node('div', '', 'field');
+    const modelLabel = node('label', 'Model (default: openrouter/free)');
+    const modelInput = node('input');
+    modelInput.type = 'text';
+    modelInput.placeholder = 'openrouter/free';
+    modelInput.value = config.model || 'openrouter/free';
+    modelField.append(modelLabel, modelInput);
+    elements.push(modelField);
+
+    const saveBtn = action('Save Settings', () => {
+      const val = keyInput.value.trim();
+      clientKey = val;
+      localStorage.setItem('usion.openrouter_key', JSON.stringify(val));
+      const mod = modelInput.value.trim() || 'openrouter/free';
+      config.model = mod;
+      localStorage.setItem('usion.openrouter_model', JSON.stringify(mod));
+      config.hasServerKey = !!clientKey;
+      toast(val ? 'OpenRouter key saved!' : 'Key removed.');
+      $('modal').close();
+      render();
+    }, 'dialog-action');
+    elements.push(saveBtn);
+  }
+
+  if (projectBlocked) {
+    elements.push(node('p', 'OpenRouter returned an authorization or billing error. Please check your API key and credits at openrouter.ai.', 'dialog-copy'));
+  }
+  openDialog('Settings', ...elements);
+}
+$('settings').onclick=settings;
+$('new').onclick=newChat;
+function closeSidebar() {
+  $('sidebar').classList.remove('open');
+  $('menu').setAttribute('aria-expanded','false');
+}
+$('menu').onclick=()=>{$('menu').setAttribute('aria-expanded',$('sidebar').classList.toggle('open'));};
+$('scroll').addEventListener('scroll',()=>$('navigation').classList.toggle('scrolled',$('scroll').scrollTop>3),{passive:true});
+$('usage').onclick=()=>{
+  const usage=usageFor(getChat());
+  const chart=node('div','','usage-chart');
+  const maximum=Math.max(1,usage.input,usage.output,usage.thinking);
+  for(const [label,value] of [['Input',usage.input],['Output',usage.output],['Thinking',usage.thinking]]) {
+    const row=node('div','','usage-line');
+    const meter=node('meter');
+    meter.max=maximum;meter.value=value;meter.setAttribute('aria-label',label+' tokens');
+    row.append(node('span',label),meter,node('strong',number(value)));
+    chart.append(row);
+  }
+  const total=node('div','','usage-total');
+  total.append(node('span','Total'),node('strong',number(usage.total)+' tokens'));
+  openDialog('Token usage',node('p','Token usage for this conversation. Input includes context sent with each request.','dialog-copy'),chart,total);
+};
+function setupIntroOverlay() {
+  const overlay = $('intro-overlay');
+  const video = $('intro-video');
+  const skipBtn = $('intro-skip');
+  const muteBtn = $('intro-mute');
+  const muteText = $('intro-mute-text');
+  const progressFill = $('intro-progress-fill');
+  if (!overlay || !video) return;
+
+  let dismissed = false;
+  function dismiss() {
+    if (dismissed) return;
+    dismissed = true;
+    overlay.classList.add('fade-out');
+    setTimeout(() => {
+      overlay.hidden = true;
+      try { video.pause(); } catch (_) {}
+    }, 450);
+  }
+
+  video.play().catch(() => {});
+
+  video.ontimeupdate = () => {
+    if (video.duration && progressFill) {
+      const pct = Math.min(100, Math.max(0, (video.currentTime / video.duration) * 100));
+      progressFill.style.width = pct + '%';
+    }
+  };
+
+  video.onended = () => dismiss();
+
+  if (skipBtn) skipBtn.onclick = () => dismiss();
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target.classList.contains('intro-backdrop') || e.target === overlay) {
+      dismiss();
+    }
+  });
+
+  if (muteBtn) {
+    muteBtn.onclick = () => {
+      video.muted = !video.muted;
+      if (muteText) muteText.textContent = video.muted ? 'Sound on' : 'Mute';
+    };
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (!overlay.hidden && (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter')) {
+      if (e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'INPUT') {
+        dismiss();
+      }
+    }
+  });
+}
+
+function setupRosogollaBowl() {
+  const canvas = $('rosogolla-bowl');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const size = 400;
+  canvas.width = size * dpr;
+  canvas.height = size * dpr;
+  ctx.scale(dpr, dpr);
+
+  let angle = 0;
+  let speed = 0.014;
+  let targetSpeed = 0.014;
+  let mouseTiltX = 0;
+  let mouseTiltY = 0;
+  let currentTiltX = 0;
+  let currentTiltY = 0;
+
+  const sweets = [
+    { x: 0, y: -15, z: 0, r: 35 },
+    { x: 58, y: -9, z: 0, r: 30 },
+    { x: 29, y: -7, z: 50.2, r: 30 },
+    { x: -29, y: -10, z: 50.2, r: 30 },
+    { x: -58, y: -8, z: 0, r: 30 },
+    { x: -29, y: -9, z: -50.2, r: 30 },
+    { x: 29, y: -11, z: -50.2, r: 30 }
+  ];
+
+  const pores = sweets.map((s, idx) => {
+    const list = [];
+    for (let p = 0; p < 7; p++) {
+      const theta = (p * 1.3) + idx;
+      const dist = (0.2 + (p % 4) * 0.18) * s.r;
+      list.push({
+        dx: Math.cos(theta) * dist,
+        dy: Math.sin(theta) * dist * 0.7,
+        size: 0.9 + (p % 3) * 0.5
+      });
+    }
+    return list;
+  });
+
+  const stage = canvas.parentElement;
+  if (stage) {
+    stage.addEventListener('pointermove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const ny = ((e.clientY - rect.top) / rect.height) * 2 - 1;
+      mouseTiltX = nx * 10;
+      mouseTiltY = ny * 6;
+      targetSpeed = 0.024;
+    });
+    stage.addEventListener('pointerleave', () => {
+      mouseTiltX = 0;
+      mouseTiltY = 0;
+      targetSpeed = 0.014;
+    });
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, size, size);
+
+    speed += (targetSpeed - speed) * 0.05;
+    currentTiltX += (mouseTiltX - currentTiltX) * 0.08;
+    currentTiltY += (mouseTiltY - currentTiltY) * 0.08;
+    angle = (angle + speed) % (Math.PI * 2);
+
+    const cx = 200 + currentTiltX;
+    const cy = 205 + currentTiltY;
+    const pitch = 0.44;
+
+    // 1. Table Ambient Glow & Cast Shadow beneath the bowl
+    ctx.save();
+    const glowGrad = ctx.createRadialGradient(cx, cy + 95, 20, cx, cy + 95, 140);
+    glowGrad.addColorStop(0, 'rgba(208, 243, 68, 0.16)');
+    glowGrad.addColorStop(0.5, 'rgba(150, 200, 30, 0.06)');
+    glowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = glowGrad;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 95, 140, 48, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    const shadowGrad = ctx.createRadialGradient(cx, cy + 92, 10, cx, cy + 92, 110);
+    shadowGrad.addColorStop(0, 'rgba(0, 0, 0, 0.75)');
+    shadowGrad.addColorStop(0.6, 'rgba(12, 16, 8, 0.4)');
+    shadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = shadowGrad;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 92, 110, 36, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 2. Outer Ceramic Bowl (Back wall & base)
+    ctx.save();
+    ctx.fillStyle = '#0f120c';
+    ctx.strokeStyle = '#2b341c';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 88, 55, 16, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    const bowlBodyGrad = ctx.createLinearGradient(cx - 145, cy, cx + 145, cy + 90);
+    bowlBodyGrad.addColorStop(0, '#1c2215');
+    bowlBodyGrad.addColorStop(0.35, '#28331a');
+    bowlBodyGrad.addColorStop(0.7, '#151a10');
+    bowlBodyGrad.addColorStop(1, '#0e110a');
+
+    ctx.fillStyle = bowlBodyGrad;
+    ctx.strokeStyle = '#384622';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx - 142, cy - 14);
+    ctx.bezierCurveTo(cx - 140, cy + 50, cx - 85, cy + 86, cx - 52, cy + 86);
+    ctx.ellipse(cx, cy + 86, 52, 15, 0, Math.PI, 0, true);
+    ctx.bezierCurveTo(cx + 85, cy + 86, cx + 140, cy + 50, cx + 142, cy - 14);
+    ctx.ellipse(cx, cy - 14, 142, 54, 0, 0, Math.PI, true);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    const innerCavityGrad = ctx.createRadialGradient(cx, cy - 14, 30, cx, cy - 14, 138);
+    innerCavityGrad.addColorStop(0, '#3d4e22');
+    innerCavityGrad.addColorStop(0.5, '#222c15');
+    innerCavityGrad.addColorStop(1, '#11150c');
+    ctx.fillStyle = innerCavityGrad;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - 14, 138, 51, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // 3. Sweet Golden Syrup (Chashni) pool
+    ctx.save();
+    const syrupY = cy - 6;
+    const syrupRx = 126;
+    const syrupRy = 45;
+    const syrupGrad = ctx.createRadialGradient(cx - 20, syrupY - 8, 15, cx, syrupY, syrupRx);
+    syrupGrad.addColorStop(0, '#fae6a6');
+    syrupGrad.addColorStop(0.35, '#e0a133');
+    syrupGrad.addColorStop(0.7, '#b36f16');
+    syrupGrad.addColorStop(1, '#7a4205');
+    ctx.fillStyle = syrupGrad;
+    ctx.beginPath();
+    ctx.ellipse(cx, syrupY, syrupRx, syrupRy, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(255, 245, 200, 0.45)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.ellipse(cx - 6, syrupY - 4, syrupRx * 0.85, syrupRy * 0.82, -0.05, Math.PI * 0.75, Math.PI * 1.85);
+    ctx.stroke();
+    ctx.restore();
+
+    // 4. Project and sort the 7 Rosogollas (rotating on axis)
+    const projectedSweets = sweets.map((s, idx) => {
+      const rx = s.x * Math.cos(angle) - s.z * Math.sin(angle);
+      const rz = s.x * Math.sin(angle) + s.z * Math.cos(angle);
+      const ry = s.y + Math.sin(angle * 2.2 + idx) * 2.4;
+
+      const sx = cx + rx;
+      const sy = (cy - 14) + ry * Math.cos(pitch) + rz * Math.sin(pitch);
+      const rad = s.r * (1 + rz * 0.0015);
+      return { idx, sx, sy, rad, rz };
+    }).sort((a, b) => a.rz - b.rz);
+
+    // 5. Render each Rosogolla
+    projectedSweets.forEach(({ idx, sx, sy, rad }) => {
+      ctx.save();
+
+      // Contact shadow in syrup
+      ctx.fillStyle = 'rgba(85, 42, 6, 0.42)';
+      ctx.beginPath();
+      ctx.ellipse(sx, sy + rad * 0.52, rad * 0.88, rad * 0.42, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Spongy Spherical Body
+      const lightX = sx - rad * 0.36;
+      const lightY = sy - rad * 0.38;
+      const sweetGrad = ctx.createRadialGradient(lightX, lightY, rad * 0.06, sx, sy, rad);
+      sweetGrad.addColorStop(0, '#ffffff');
+      sweetGrad.addColorStop(0.16, '#fffef8');
+      sweetGrad.addColorStop(0.52, '#fcf5e5');
+      sweetGrad.addColorStop(0.82, '#eedbc2');
+      sweetGrad.addColorStop(1, '#d8bc92');
+
+      ctx.fillStyle = sweetGrad;
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.28)';
+      ctx.shadowBlur = 8;
+      ctx.shadowOffsetY = 4;
+      ctx.beginPath();
+      ctx.arc(sx, sy, rad, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
+
+      // Texture pores
+      ctx.fillStyle = 'rgba(185, 150, 110, 0.38)';
+      pores[idx].forEach(p => {
+        const px = sx + p.dx * Math.cos(angle) - p.dy * Math.sin(angle) * 0.3;
+        const py = sy + p.dx * Math.sin(angle) * 0.3 + p.dy;
+        ctx.beginPath();
+        ctx.arc(px, py, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Saffron garnish (kesar)
+      const garnishAngle = angle + idx * 0.9;
+      const gx = sx + Math.cos(garnishAngle) * (rad * 0.2);
+      const gy = sy - rad * 0.25 + Math.sin(garnishAngle) * (rad * 0.15);
+
+      ctx.strokeStyle = '#d63b00';
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(gx - 4, gy - 2);
+      ctx.quadraticCurveTo(gx + 2, gy - 7, gx + 6, gy + 1);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#e67300';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(gx - 2, gy + 3);
+      ctx.quadraticCurveTo(gx + 3, gy + 7, gx + 8, gy + 4);
+      ctx.stroke();
+
+      // Pistachio specks
+      ctx.fillStyle = '#99cc33';
+      ctx.beginPath();
+      ctx.arc(gx + 2, gy - 3, 1.4, 0, Math.PI * 2);
+      ctx.arc(gx - 5, gy + 4, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#66991a';
+      ctx.beginPath();
+      ctx.arc(gx + 5, gy + 2, 1.3, 0, Math.PI * 2);
+      ctx.arc(gx - 3, gy - 5, 1.0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Liquid specular drop
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.beginPath();
+      ctx.ellipse(lightX, lightY, rad * 0.16, rad * 0.1, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    });
+
+    // 6. Front Lip of the Ceramic Bowl
+    ctx.save();
+    const frontRimGrad = ctx.createLinearGradient(cx - 142, cy - 14, cx + 142, cy + 30);
+    frontRimGrad.addColorStop(0, '#1f2617');
+    frontRimGrad.addColorStop(0.4, '#2d381c');
+    frontRimGrad.addColorStop(0.7, '#1f2617');
+    frontRimGrad.addColorStop(1, '#11150c');
+
+    ctx.fillStyle = frontRimGrad;
+    ctx.strokeStyle = '#3e4d25';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx - 142, cy - 14);
+    ctx.ellipse(cx, cy - 14, 142, 54, 0, Math.PI, 0, true);
+    ctx.bezierCurveTo(cx + 130, cy + 18, cx + 60, cy + 42, cx, cy + 44);
+    ctx.bezierCurveTo(cx - 60, cy + 42, cx - 130, cy + 18, cx - 142, cy - 14);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Top rim lime specular highlight
+    ctx.strokeStyle = 'rgba(208, 243, 68, 0.65)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - 14, 140, 52, 0, Math.PI * 0.08, Math.PI * 0.92, false);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - 12, 137, 50, 0, Math.PI * 0.12, Math.PI * 0.88, false);
+    ctx.stroke();
+
+    // 7. Rotating Axis Marker
+    ctx.setLineDash([4, 6]);
+    ctx.strokeStyle = 'rgba(208, 243, 68, 0.28)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 96, 75, 24, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.restore();
+
+    requestAnimationFrame(draw);
+  }
+
+  requestAnimationFrame(draw);
+}
+function transcriptFor(chat) {
+  return ['# '+chat.title,'',...chat.messages.flatMap(message=>[
+    '## '+(message.role==='user'?'You':'Rosogolla')+(message.voice?' · Live voice':''),'',message.text,
+    ...(message.names?.length?['','Attachments: '+message.names.join(', ')]:[]),
+    ...(message.usage?['','Tokens: '+number(message.usage.totalTokenCount)]:[]),''
+  ]),'Total tokens: '+number(usageFor(chat).total)].join('\n');
+}
+$('share').onclick=async()=>{
+  const chat=getChat();
+  if(!chat)return;
+  try {
+    if(navigator.share)await navigator.share({title:chat.title,text:transcriptFor(chat)});
+    else {await navigator.clipboard.writeText(transcriptFor(chat));toast('Transcript copied for sharing.');}
+  } catch(error) {if(error.name!=='AbortError')toast('Sharing is unavailable. You can export the transcript instead.');}
+};
+$('export').onclick=()=>{
+  const chat=getChat();if(!chat)return;
+  const url=URL.createObjectURL(new Blob([transcriptFor(chat)],{type:'text/markdown;charset=utf-8'}));
+  const link=node('a');link.href=url;link.download='rosogolla-'+(chat.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'transcript').slice(0,48)+'.md';
+  link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+document.querySelectorAll('[data-prompt]').forEach(button=>button.onclick=()=>{$('prompt').value=button.dataset.prompt;$('prompt').focus();});
+$('suggest-file').onclick=$('attach').onclick=()=>$('files').click();
+function renderAttachments() {
+  $('attachments').replaceChildren(...files.map((file,index)=>{
+    const chip=node('span','','chip');
+    const remove=action('×',()=>{files.splice(index,1);renderAttachments();});
+    remove.setAttribute('aria-label','Remove '+file.name);
+    chip.append(icon('file'),file.name,remove);
+    return chip;
+  }));
+}
+$('files').onchange=async()=>{
+  const selection=[...$('files').files];
+  $('files').value='';
+  const destination=files;
+  readingFiles=true;$('send').disabled=true;
+  try {
+    for (const file of selection) {
+      if(destination.length>=4||destination.reduce((sum,item)=>sum+item.size,0)+file.size>5*1024*1024){toast('Attach up to four files, totaling 5 MB.');break;}
+      const extension=file.name.toLowerCase().split('.').pop();
+      const type={pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',txt:'text/plain',md:'text/plain',csv:'text/plain',json:'text/plain'}[extension];
+      if(!type){toast('Choose a PDF, image, or plain-text document.');continue;}
+      if(type==='text/plain'&&file.size>1500000){toast('Text documents can be up to 1.5 MB.');continue;}
+      const data=type==='text/plain'?await file.text():await new Promise((resolve,reject)=>{
+        const reader=new FileReader();reader.onerror=reject;reader.onload=()=>resolve(reader.result.split(',')[1]);reader.readAsDataURL(file);
+      });
+      if(data) destination.push({name:file.name,mime:type,data,size:file.size});
+      else toast('The attachment is empty.');
+    }
+  } catch {toast('The attachment could not be read.');}
+  finally{readingFiles=false;$('send').disabled=pending;renderAttachments();}
+};
+async function sendChat(chat) {
+  if(pending)return;
+  if(!config.hasServerKey && !clientKey){settings();return;}
+  pending=true;chat.pending=true;delete chat.failed;render(current===chat.id);
+  try {
+    let contextSize=0;
+    const messages=[];
+    for (const message of chat.messages.slice(-100).reverse()) {
+      const item={role:message.role,text:message.text,files:fileCache.get(message.id)};
+      const size=JSON.stringify(item).length;
+      if(contextSize+size>11000000)break;
+      contextSize+=size;
+      messages.unshift(item);
+    }
+    while(messages[0]?.role==='model')messages.shift();
+    let result;
+    if (config.isStatic || (!config.hasServerKey && clientKey)) {
+      result = await callOpenRouterDirect(messages, config.model, clientKey);
+    } else {
+      result = await api('chat',{messages});
+    }
+    chat.messages.push({role:'model',text:result.reply,usage:result.usage});
+    temperature=result.temperature;
+    projectBlocked=false;
+  } catch(error) {
+    chat.failed={message:error.message,code:error.code};
+    if(error.code==='OPENROUTER_CREDITS_EXHAUSTED'||error.code==='OPENROUTER_AUTH_ERROR')projectBlocked=true;
+  }
+  finally {
+    pending=false;delete chat.pending;save();render(current===chat.id);
+  }
+}
+$('composer').onsubmit=event=>{
+  event.preventDefault();
+  if(pending||readingFiles)return;
+  const text=$('prompt').value.trim()||(files.length?'Please help me understand the attached material.':'');
+  if(!text)return;
+  if(!config.hasServerKey && !clientKey){settings();return;}
+  const chat=getChat()||createChat(text);
+  if(chat.failed) {
+    toast('Retry the previous message or start a new chat.');
+    return;
+  }
+  const id=crypto.randomUUID();
+  if(files.length)fileCache.set(id,files);
+  chat.messages.push({id,role:'user',text,names:files.map(file=>file.name)});
+  files=[];$('prompt').value='';save();sendChat(chat);
+};
+$('prompt').onkeydown=event=>{
+  if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();$('composer').requestSubmit();}
+};
+function highlight() {
+  const query=$('findbar').hidden?'':$('find-input').value.trim();
+  const marks=[];
+  if(query){
+    const escaped=query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const regex = new RegExp(escaped,'gi');
+    const walker=document.createTreeWalker($('messages'),NodeFilter.SHOW_TEXT);
+    const candidates=[];
+    while(walker.nextNode())if(walker.currentNode.parentElement.closest('.message-body'))candidates.push(walker.currentNode);
+    for(const text of candidates){
+      const hits=[...text.data.matchAll(regex)];
+      if(!hits.length)continue;
+      const fragment=document.createDocumentFragment();
+      let offset=0;
+      for (const hit of hits) {
+        const mark=node('mark',hit[0]);
+        fragment.append(text.data.slice(offset,hit.index),mark);
+        offset=hit.index+hit[0].length;
+        marks.push(mark);
+      }
+      fragment.append(text.data.slice(offset));text.replaceWith(fragment);
+    }
+  }
+  if(marks.length)match=(match+marks.length)%marks.length;
+  marks[match]?.classList.add('active');
+  $('find-count').textContent=marks.length?`${match+1} of ${marks.length}`:query?'0 matches':'';
+  $('prev').disabled=$('next').disabled=!marks.length;
+}
+function openFind() {
+  if(!getChat())return;
+  $('findbar').hidden=false;renderMessages(getChat());$('find-input').focus();
+}
+function findMove(direction) {
+  const marks=[...$('messages').querySelectorAll('mark')];
+  if(!marks.length)return;
+  marks[match]?.classList.remove('active');
+  match=(match+direction+marks.length)%marks.length;
+  marks[match].classList.add('active');
+  marks[match].scrollIntoView({block:'center'});
+  $('find-count').textContent=`${match+1} of ${marks.length}`;
+}
+$('find').onclick=openFind;
+$('find-input').oninput=()=>{match=0;renderMessages(getChat());$('messages').querySelector('mark.active')?.scrollIntoView({block:'center'});};
+$('find-input').onkeydown=event=>{if(event.key==='Enter')findMove(event.shiftKey?-1:1);};
+$('next').onclick=()=>findMove(1);
+$('prev').onclick=()=>findMove(-1);
+$('close-find').onclick=()=>{$('findbar').hidden=true;$('find-input').value='';renderMessages(getChat());$('find').focus();};
+$('search').onclick=()=>{
+  const input=node('input');input.type='search';input.placeholder='Search titles and messages';input.setAttribute('aria-label','Search titles and messages');
+  const results=node('div');
+  const update=()=>{
+    const query=input.value.trim().toLowerCase();
+    const matches=chats.filter(chat=>chat.title.toLowerCase().includes(query)||chat.messages.some(message=>message.text.toLowerCase().includes(query)));
+    results.replaceChildren(...matches.map(chat=>action(chat.title,()=>{
+      choose(chat.id);$('modal').close();
+      if(query){$('find-input').value=input.value.trim();openFind();$('messages').querySelector('mark.active')?.scrollIntoView({block:'center'});}
+    },'result')));
+    if(!matches.length)results.append(node('p','No matching conversations.','dialog-copy'));
+  };
+  input.oninput=update;update();openDialog('Search chats',input,results);input.focus();
+};
+document.addEventListener('keydown',event=>{
+  if($('modal').open)return;
+  if(event.altKey&&event.key.toLowerCase()==='n'){event.preventDefault();newChat();}
+  if((event.metaKey||event.ctrlKey)&&event.key==='f'&&getChat()){event.preventDefault();openFind();}
+  if(event.key==='Escape')closeSidebar();
+});
+$('dictate').onclick=()=>{
+  if(recording){recording.stop();return;}
+  const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!Recognition){toast('Dictation needs browser speech recognition. Live voice also accepts speech directly.');return;}
+  const speech=new Recognition();
+  speech.lang=navigator.language;speech.interimResults=false;speech.continuous=true;
+  speech.onstart=()=>{recording=speech;$('dictate').setAttribute('aria-pressed','true');toast('Listening. Say “send message” to send.');};
+  speech.onend=()=>{recording=null;$('dictate').setAttribute('aria-pressed','false');};
+  speech.onerror=event=>toast('Dictation: '+event.error.replaceAll('-',' ')+'.');
+  speech.onresult=event=>{
+    for(let index=event.resultIndex;index<event.results.length;index++){
+      const text=event.results[index][0].transcript.trim();
+      const command=text.match(/^(.*?)\s*\bsend message[.!?]?$/i);
+      if(command){
+        if(command[1])$('prompt').value+=($('prompt').value?' ':'')+command[1];
+        speech.stop();$('composer').requestSubmit();break;
+      }
+      $('prompt').value+=($('prompt').value?' ':'')+text;
+    }
+  };
+  try{speech.start();}catch{toast('Dictation could not start.');}
+};
+function switchProfile(next) {
+  if(pending){toast('Wait for the current response before switching accounts.');return;}
+  profile=next;
+  sessionStorage.setItem('usion.profile',JSON.stringify(next));
+  chats=restoreChats(profile?.id);
+  fileCache.clear();
+  newChat();
+  $('modal').close();
+}
+let googleScript;
+$('account').onclick=async()=>{
+  if(profile){
+    openDialog('Your account',node('p',profile.email||profile.name,'dialog-copy'),action('Sign out',()=>{window.google?.accounts.id.disableAutoSelect();switchProfile(null);},'dialog-action'));
+    return;
+  }
+  if(!config.googleClientId){
+    openDialog('Sign in with Google',node('p','This installation needs a Google OAuth Web client ID in GOOGLE_CLIENT_ID. See the project setup guide.','dialog-copy'));
+    return;
+  }
+  const container=node('div');
+  const status=node('p','Chat history is kept in this browser for each account.','dialog-copy');
+  openDialog('Sign in with Google',status,container);
+  try{
+    if(!window.google?.accounts?.id){
+      googleScript??=new Promise((resolve,reject)=>{
+        const script=node('script');script.src='https://accounts.google.com/gsi/client';script.async=true;
+        script.onload=resolve;script.onerror=()=>{script.remove();googleScript=null;reject();};
+        document.head.append(script);
+      });
+      await googleScript;
+    }
+    google.accounts.id.initialize({client_id:config.googleClientId,callback:async({credential})=>{
+      try{switchProfile(await api('google',{credential}));}catch(error){status.textContent=error.message;}
+    }});
+    google.accounts.id.renderButton(container,{theme:'filled_black',size:'large',text:'signin_with'});
+  }catch{status.textContent='Google sign-in could not load.';}
+};
+function showLive() {
+  if(activeLive)return;
+  const stage=node('div','','voice-stage');
+  const orbit=node('div','','orbit');
+  orbit.setAttribute('aria-hidden','true');
+  const orb=node('div','','orb');
+  orbit.append(orb);
+  const status=node('p','Speak with Rosogolla in real time.','dialog-copy voice-status');
+  status.setAttribute('role','status');
+  const caption=node('p','','voice-caption');
+  caption.hidden=true;
+  const start=action('Start conversation',()=>{
+    if(!config.hasServerKey){settings();return;}
+    if(pending){toast('Wait for the current response before starting live voice.');return;}
+    recording?.stop();
+    status.textContent='Connecting and requesting microphone access…';
+    stage.dataset.state='connecting';
+    caption.hidden=false;
+    start.replaceWith(action('End session',()=>$('modal').close(),'dialog-action'));
+    connectLive(stage,orb,status,caption);
+  },'dialog-action');
+  stage.append(orbit,status,caption,start);
+  openDialog('Live with Rosogolla',stage);
+  $('modal').dataset.view='voice';
+}
+$('hero-live').onclick=$('live').onclick=showLive;
+function connectLive(stage,orb,status,caption) {
+  let chat=getChat();
+  const control=startLive({
+    authorize:()=>api('live'),
+    onStatus:(text,connected)=>{
+      status.textContent=text;
+      stage.dataset.state=connected?'listening':'ended';
+    },
+    onActivity:(state,level)=>{
+      stage.dataset.state=state;
+      orb.style.setProperty('--level',String(level));
+    },
+    onCaption:(text)=>{caption.textContent=text;caption.scrollTop=caption.scrollHeight;},
+    onTurn:({input,output,usage})=>{
+      if(!input&&!output&&!usage)return;
+      chat??=createChat('Live voice');
+      if(input)chat.messages.push({role:'user',text:input,voice:true});
+      if(output||usage)chat.messages.push({role:'model',text:output||'',usage,voice:true});
+      save();render(current===chat.id);
+    },
+    onEnd:()=>{if(activeLive===control)activeLive=null;}
+  });
+  activeLive=control;
+}
+fetch('./api/config').then(response => {
+  if (!response.ok) throw new Error('Static host');
+  return response.json();
+}).then(data => {
+  config = data;
+  if (!config.hasServerKey && clientKey) config.hasServerKey = true;
+  render();
+}).catch(() => {
+  config = {
+    model: load('usion.openrouter_model', 'openrouter/free'),
+    liveModel: '',
+    hasServerKey: !!clientKey,
+    googleClientId: '',
+    liveVoiceEnabled: false,
+    isStatic: true
+  };
+  render();
+});
+render();
+setupIntroOverlay();
+setupRosogollaBowl();

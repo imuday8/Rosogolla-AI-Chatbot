@@ -1,3 +1,65 @@
+let clientKey = load('usion.openrouter_key', '');
+
+async function callOpenRouterDirect(messages, model, key) {
+  const openRouterMessages = [];
+  const mime = new Set(['application/pdf','image/png','image/jpeg','image/webp']);
+  for (const message of messages) {
+    const role = message.role === 'model' ? 'assistant' : 'user';
+    if (message.role === 'user' && message.files && message.files.length) {
+      const content = [];
+      if (message.text) content.push({type: 'text', text: message.text});
+      for (const file of message.files) {
+        if (file.mime === 'text/plain') {
+          content.push({type: 'text', text: 'Attached file: ' + String(file.name).slice(0, 150) + '\n' + file.data});
+        } else if (mime.has(file.mime)) {
+          content.push({type: 'image_url', image_url: {url: 'data:' + file.mime + ';base64,' + file.data}});
+        }
+      }
+      openRouterMessages.push({role, content});
+    } else {
+      if (message.text) openRouterMessages.push({role, content: message.text});
+    }
+  }
+
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + key,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': window.location.href,
+      'X-Title': 'Rosogolla'
+    },
+    body: JSON.stringify({
+      model: model || 'openrouter/free',
+      messages: [
+        {role: 'system', content: 'You are Rosogolla, a thoughtful, creative AI assistant. Respond in the language the user is speaking unless they request another language.'},
+        ...openRouterMessages
+      ],
+      temperature: 1
+    })
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    const msg = data.error?.message || data.error || 'OpenRouter error';
+    const err = new Error(msg);
+    if (response.status === 402) err.code = 'OPENROUTER_CREDITS_EXHAUSTED';
+    if (response.status === 401) err.code = 'OPENROUTER_AUTH_ERROR';
+    if (response.status === 429) err.code = 'OPENROUTER_RATE_LIMITED';
+    throw err;
+  }
+  const choice = data.choices?.[0];
+  const reply = choice?.message?.content || '';
+  const rawUsage = data.usage;
+  const usage = rawUsage ? {
+    promptTokenCount: rawUsage.prompt_tokens ?? 0,
+    candidatesTokenCount: rawUsage.completion_tokens ?? 0,
+    thoughtsTokenCount: 0,
+    totalTokenCount: rawUsage.total_tokens ?? 0
+  } : null;
+  return { reply, usage, temperature: 1 };
+}
+
 import {startLive} from './live.js?v=2';
 
 const $ = id => document.getElementById(id);
@@ -79,7 +141,7 @@ function toast(text) {
 }
 async function api(path,body={}) {
   const headers={'Content-Type':'application/json'};
-  const response=await fetch('/api/'+path,{method:'POST',headers,body:JSON.stringify(body)});
+  const response=await fetch('./api/'+path,{method:'POST',headers,body:JSON.stringify(body)});
   const data=await response.json().catch(()=>({}));
   if (!response.ok) {
     const error=new Error(data.error||'The service is unavailable.');
@@ -235,12 +297,49 @@ function render(bottom=false) {
   if (bottom) $('scroll').scrollTop=$('scroll').scrollHeight;
 }
 function settings() {
-  const description=node('p',config.hasServerKey
-    ?'This site uses its server’s OpenRouter connection. You can chat without entering an API key.'
-    :'Chat will be available once the site owner configures an OpenRouter API key on the server.','dialog-copy');
-  const status=node('p',config.model+' · Temperature '+temperature,'dialog-copy');
-  if(projectBlocked)openDialog('Settings',description,status,node('p','OpenRouter returned an authorization or billing error. The site owner should check the API key and credits at openrouter.ai.','dialog-copy'));
-  else openDialog('Settings',description,status);
+  const elements = [];
+  if (config.hasServerKey && !config.isStatic) {
+    elements.push(node('p', 'This site uses its server’s OpenRouter connection. You can chat without entering an API key.', 'dialog-copy'));
+    elements.push(node('p', config.model + ' · Temperature ' + temperature, 'dialog-copy'));
+  } else {
+    elements.push(node('p', 'This site is running on GitHub Pages (static mode). Enter your OpenRouter API key below to chat. It is stored securely in your browser.', 'dialog-copy'));
+    const keyField = node('div', '', 'field');
+    const keyLabel = node('label', 'OpenRouter API Key');
+    const keyInput = node('input');
+    keyInput.type = 'password';
+    keyInput.placeholder = 'sk-or-v1-...';
+    keyInput.value = clientKey;
+    keyField.append(keyLabel, keyInput);
+    elements.push(keyField);
+
+    const modelField = node('div', '', 'field');
+    const modelLabel = node('label', 'Model (default: openrouter/free)');
+    const modelInput = node('input');
+    modelInput.type = 'text';
+    modelInput.placeholder = 'openrouter/free';
+    modelInput.value = config.model || 'openrouter/free';
+    modelField.append(modelLabel, modelInput);
+    elements.push(modelField);
+
+    const saveBtn = action('Save Settings', () => {
+      const val = keyInput.value.trim();
+      clientKey = val;
+      localStorage.setItem('usion.openrouter_key', JSON.stringify(val));
+      const mod = modelInput.value.trim() || 'openrouter/free';
+      config.model = mod;
+      localStorage.setItem('usion.openrouter_model', JSON.stringify(mod));
+      config.hasServerKey = !!clientKey;
+      toast(val ? 'OpenRouter key saved!' : 'Key removed.');
+      $('modal').close();
+      render();
+    }, 'dialog-action');
+    elements.push(saveBtn);
+  }
+
+  if (projectBlocked) {
+    elements.push(node('p', 'OpenRouter returned an authorization or billing error. Please check your API key and credits at openrouter.ai.', 'dialog-copy'));
+  }
+  openDialog('Settings', ...elements);
 }
 $('settings').onclick=settings;
 $('new').onclick=newChat;
@@ -672,7 +771,7 @@ $('files').onchange=async()=>{
 };
 async function sendChat(chat) {
   if(pending)return;
-  if(!config.hasServerKey){settings();return;}
+  if(!config.hasServerKey && !clientKey){settings();return;}
   pending=true;chat.pending=true;delete chat.failed;render(current===chat.id);
   try {
     let contextSize=0;
@@ -685,7 +784,12 @@ async function sendChat(chat) {
       messages.unshift(item);
     }
     while(messages[0]?.role==='model')messages.shift();
-    const result=await api('chat',{messages});
+    let result;
+    if (config.isStatic || (!config.hasServerKey && clientKey)) {
+      result = await callOpenRouterDirect(messages, config.model, clientKey);
+    } else {
+      result = await api('chat',{messages});
+    }
     chat.messages.push({role:'model',text:result.reply,usage:result.usage});
     temperature=result.temperature;
     projectBlocked=false;
@@ -702,7 +806,7 @@ $('composer').onsubmit=event=>{
   if(pending||readingFiles)return;
   const text=$('prompt').value.trim()||(files.length?'Please help me understand the attached material.':'');
   if(!text)return;
-  if(!config.hasServerKey){settings();return;}
+  if(!config.hasServerKey && !clientKey){settings();return;}
   const chat=getChat()||createChat(text);
   if(chat.failed) {
     toast('Retry the previous message or start a new chat.');
@@ -892,7 +996,24 @@ function connectLive(stage,orb,status,caption) {
   });
   activeLive=control;
 }
-fetch('/api/config').then(response=>response.json()).then(data=>{config=data;render();}).catch(()=>{});
+fetch('./api/config').then(response => {
+  if (!response.ok) throw new Error('Static host');
+  return response.json();
+}).then(data => {
+  config = data;
+  if (!config.hasServerKey && clientKey) config.hasServerKey = true;
+  render();
+}).catch(() => {
+  config = {
+    model: load('usion.openrouter_model', 'openrouter/free'),
+    liveModel: '',
+    hasServerKey: !!clientKey,
+    googleClientId: '',
+    liveVoiceEnabled: false,
+    isStatic: true
+  };
+  render();
+});
 render();
 setupIntroOverlay();
 setupRosogollaBowl();
