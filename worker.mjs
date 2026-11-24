@@ -1,6 +1,17 @@
 const api = 'https://openrouter.ai/api/v1';
 const instruction = 'You are Rosogolla, a smart, warm, and helpful AI assistant. Always match the user’s exact language and script style: if the user writes in English, reply in English; if the user writes in Hinglish (Hindi written in Roman/English alphabet, like "kya haalchal", "bhai", "kaise ho"), always reply in natural, friendly Hinglish using the Roman/English script. Never switch to Devanagari Hindi script unless the user explicitly writes in Devanagari script. Keep your tone natural, helpful, and sweet.';
-const json = (body, status = 200) => Response.json(body, {status, headers: {'Cache-Control':'no-store'}});
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+};
+const json = (body, status = 200) => Response.json(body, {
+  status,
+  headers: {
+    'Cache-Control': 'no-store',
+    ...corsHeaders
+  }
+});
 const problem = (message, status) => json({error:message}, status);
 const mime = new Set(['application/pdf','image/png','image/jpeg','image/webp']);
 const defaultModel = 'openrouter/free';
@@ -104,6 +115,9 @@ function parseMessages(messages) {
 }
 
 export default {async fetch(request, env={}) {
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {status: 204, headers: corsHeaders});
+  }
   const url = new URL(request.url);
   const path = url.pathname;
   const model = env.OPENROUTER_MODEL || defaultModel;
@@ -117,7 +131,7 @@ export default {async fetch(request, env={}) {
     liveVoiceEnabled: !!liveVoiceProvider
   });
   if (request.method !== 'POST') return problem('Method not allowed.',405);
-  if (request.headers.get('sec-fetch-site') === 'cross-site' || !request.headers.get('content-type')?.startsWith('application/json')) return problem('Invalid request.',403);
+  if (!request.headers.get('content-type')?.startsWith('application/json')) return problem('Invalid request.',403);
   if (Number(request.headers.get('content-length')) > 12000000) return problem('Attachments exceed the request limit.',413);
   try {
     if (path === '/api/google') {

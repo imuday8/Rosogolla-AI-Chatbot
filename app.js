@@ -142,7 +142,8 @@ function toast(text) {
 }
 async function api(path,body={}) {
   const headers={'Content-Type':'application/json'};
-  const response=await fetch('./api/'+path,{method:'POST',headers,body:JSON.stringify(body)});
+  const base = location.hostname.includes('github.io') ? 'https://rosogolla-ai-chatbot.vercel.app' : '.';
+  const response=await fetch(base+'/api/'+path,{method:'POST',headers,body:JSON.stringify(body)});
   const data=await response.json().catch(()=>({}));
   if (!response.ok) {
     const error=new Error(data.error||'The service is unavailable.');
@@ -1375,7 +1376,8 @@ function connectLive(stage,orb,status,caption) {
   });
   activeLive=control;
 }
-fetch('./api/config').then(response => {
+const configBase = location.hostname.includes('github.io') ? 'https://rosogolla-ai-chatbot.vercel.app' : '.';
+fetch(configBase + '/api/config').then(response => {
   if (!response.ok) throw new Error('Static host');
   return response.json();
 }).then(data => {
