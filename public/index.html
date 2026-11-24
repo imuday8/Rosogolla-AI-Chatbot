@@ -7,7 +7,7 @@
 <meta name="description" content="An AI-powered workspace for ideas, documents and conversations.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="./style.css?v=5"><script type="module" src="./app.js?v=8"></script>
+<link rel="stylesheet" href="./style.css?v=9"><script type="module" src="./app.js?v=9"></script>
 </head>
 <body>
 <div id="shell">
@@ -55,17 +55,19 @@
 <div id="toast" role="status" hidden></div>
 <audio id="bg-voice" src="./voice.mp3" loop preload="auto"></audio>
 <div id="intro-overlay" class="intro-overlay fullscreen-intro" role="dialog" aria-modal="true" aria-label="Rosogolla Introduction">
-  <video id="intro-video" class="intro-video-fullscreen" src="./intro.mp4?v=3" playsinline autoplay muted loop></video>
+  <canvas id="intro-canvas" class="intro-canvas"></canvas>
   <div class="intro-overlay-vignette" aria-hidden="true"></div>
   <div class="intro-floating-header">
     <div class="intro-brand">
-      <img class="brand-logo" src="./rosogolla.svg" width="32" height="32" alt="">
+      <img class="brand-logo" src="./rosogolla.svg" width="34" height="34" alt="Rosogolla">
       <span>Rosogolla</span>
       <span class="intro-green-dot"></span>
     </div>
     <div class="intro-floating-controls">
       <button type="button" id="intro-mute" class="intro-pill" aria-label="Toggle mute">
-        <span id="intro-mute-icon" data-icon="activity"></span>
+        <span class="intro-eq-mini" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </span>
         <span id="intro-mute-text">Sound on</span>
       </button>
       <button type="button" id="intro-skip" class="intro-pill intro-skip-pill" aria-label="Enter workspace">
@@ -73,6 +75,20 @@
         <span data-icon="chevron"></span>
       </button>
     </div>
+  </div>
+  <div class="intro-center-hero">
+    <div class="intro-badge">
+      <span class="intro-badge-dot"></span>
+      <span>Autonomous AI Workspace • Powered by OpenRouter</span>
+    </div>
+    <h1 class="intro-main-title">ROSOGOLLA</h1>
+    <p class="intro-tagline">The Sweetest Intelligence</p>
+    <div class="intro-wave-box" aria-hidden="true">
+      <div class="intro-wave-bars">
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+    </div>
+    <p class="intro-hint">Click anywhere to begin</p>
   </div>
   <div class="intro-floating-bottom">
     <div class="intro-progress-track">

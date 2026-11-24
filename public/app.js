@@ -1,4 +1,4 @@
-let clientKey = load('usion.openrouter_key', '');
+let clientKey = load('rosogolla.openrouter_key', load('usion.openrouter_key', ''));
 
 async function callOpenRouterDirect(messages, model, key) {
   const openRouterMessages = [];
@@ -104,9 +104,9 @@ function action(label, handler, className='') {
 }
 const load = (key,fallback) => {try {return JSON.parse(localStorage.getItem(key)) ?? fallback;} catch {return fallback;}};
 const tab = (key,fallback) => {try {return JSON.parse(sessionStorage.getItem(key)) ?? fallback;} catch {return fallback;}};
-let profile = tab('usion.profile',null);
+let profile = tab('rosogolla.profile', tab('usion.profile', null));
 function restoreChats(id) {
-  return load('usion.chats.'+(id||'guest'),[]).map(chat=>{
+  return (load('rosogolla.chats.'+(id||'guest'), null) || load('usion.chats.'+(id||'guest'), [])).map(chat=>{
     delete chat.pending;
     const last=chat.messages.at(-1);
     if(last?.role==='user'&&!last.voice)chat.failed ||= true;
@@ -128,7 +128,7 @@ let toastTimer;
 const fileCache = new Map();
 const number = value => (value??0).toLocaleString();
 const getChat = () => chats.find(chat=>chat.id === current);
-const archiveKey = () => 'usion.chats.'+(profile?.id||'guest');
+const archiveKey = () => 'rosogolla.chats.'+(profile?.id||'guest');
 const save = () => {
   try {localStorage.setItem(archiveKey(),JSON.stringify(chats));}
   catch {toast('This browser could not save the chat history. Export a transcript to keep it.');}
@@ -324,10 +324,10 @@ function settings() {
     const saveBtn = action('Save Settings', () => {
       const val = keyInput.value.trim();
       clientKey = val;
-      localStorage.setItem('usion.openrouter_key', JSON.stringify(val));
+      localStorage.setItem('rosogolla.openrouter_key', JSON.stringify(val));
       const mod = modelInput.value.trim() || 'openrouter/free';
       config.model = mod;
-      localStorage.setItem('usion.openrouter_model', JSON.stringify(mod));
+      localStorage.setItem('rosogolla.openrouter_model', JSON.stringify(mod));
       config.hasServerKey = !!clientKey;
       toast(val ? 'OpenRouter key saved!' : 'Key removed.');
       $('modal').close();
@@ -410,61 +410,350 @@ function setupBackgroundVoice() {
 
 function setupIntroOverlay() {
   const overlay = $('intro-overlay');
-  const video = $('intro-video');
+  const canvas = $('intro-canvas');
   const skipBtn = $('intro-skip');
   const muteBtn = $('intro-mute');
   const muteText = $('intro-mute-text');
   const progressFill = $('intro-progress-fill');
-  if (!overlay || !video) return;
+  if (!overlay || !canvas) return;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  let width = 0;
+  let height = 0;
+  let dpr = 1;
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  resize();
+  window.addEventListener('resize', resize);
 
   let dismissed = false;
+  let animId = null;
+  const startTime = performance.now();
+  const INTRO_DURATION = 6800; // 6.8 seconds total intro
+
   function dismiss() {
     if (dismissed) return;
     dismissed = true;
     overlay.classList.add('fade-out');
-    // Start continuous background voice
     if (window.rosogollaVoice) window.rosogollaVoice.play();
     setTimeout(() => {
       overlay.hidden = true;
-      try { video.pause(); } catch (_) {}
-    }, 550);
+      if (animId) cancelAnimationFrame(animId);
+      window.removeEventListener('resize', resize);
+    }, 650);
   }
 
-  video.play().catch(() => {});
+  // Mouse Parallax
+  let mouseX = 0;
+  let mouseY = 0;
+  let tiltX = 0;
+  let tiltY = 0;
 
-  video.ontimeupdate = () => {
-    if (video.duration && progressFill) {
-      const pct = Math.min(100, Math.max(0, (video.currentTime / video.duration) * 100));
-      progressFill.style.width = pct + '%';
-    }
-  };
+  window.addEventListener('pointermove', (e) => {
+    mouseX = (e.clientX / width) * 2 - 1;
+    mouseY = (e.clientY / height) * 2 - 1;
+  });
 
-  video.onended = () => dismiss();
+  // Sound Controls
+  let isMuted = true;
+  if (muteBtn) {
+    muteBtn.onclick = (e) => {
+      e.stopPropagation();
+      isMuted = !isMuted;
+      if (muteText) muteText.textContent = isMuted ? 'Sound on' : 'Mute';
+      if (!isMuted && window.rosogollaVoice) {
+        window.rosogollaVoice.play();
+      } else if (isMuted && window.rosogollaVoice) {
+        window.rosogollaVoice.pause();
+      }
+    };
+  }
 
-  if (skipBtn) skipBtn.onclick = () => dismiss();
-
-  overlay.addEventListener('click', (e) => {
-    if (e.target.classList.contains('intro-overlay-vignette') || e.target === overlay) {
+  if (skipBtn) skipBtn.onclick = (e) => { e.stopPropagation(); dismiss(); };
+  overlay.onclick = () => dismiss();
+  document.addEventListener('keydown', (e) => {
+    if (!dismissed && (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ')) {
       dismiss();
     }
   });
 
-  if (muteBtn) {
-    muteBtn.onclick = (e) => {
-      e.stopPropagation();
-      video.muted = !video.muted;
-      if (muteText) muteText.textContent = video.muted ? 'Sound on' : 'Mute';
-      if (!video.muted && window.rosogollaVoice) window.rosogollaVoice.play();
-    };
+  // 3D Particles Field (Stardust & Golden Syrup Dust)
+  const particles = [];
+  const PARTICLE_COUNT = 55;
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    particles.push({
+      x: (Math.random() - 0.5) * 1.6,
+      y: (Math.random() - 0.5) * 1.6,
+      z: 0.2 + Math.random() * 1.2,
+      vy: 0.0008 + Math.random() * 0.0016,
+      size: 1.2 + Math.random() * 2.2,
+      isGreen: Math.random() > 0.45,
+      twinkleOffset: Math.random() * Math.PI * 2
+    });
   }
 
-  document.addEventListener('keydown', (e) => {
-    if (!overlay.hidden && (e.key === 'Escape' || e.key === ' ' || e.key === 'Enter')) {
-      if (e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'INPUT') {
-        dismiss();
-      }
+  // Pre-generate 36 spongy micro-pores on 3D sphere
+  const pores = [];
+  for (let p = 0; p < 36; p++) {
+    const u = (p * 1.618) % 1;
+    const v = p / 36;
+    const theta = u * Math.PI * 2;
+    const phi = Math.acos(2 * v - 1) - Math.PI / 2;
+    pores.push({
+      x: Math.cos(phi) * Math.cos(theta),
+      y: Math.sin(phi),
+      z: Math.cos(phi) * Math.sin(theta),
+      size: 1.0 + (p % 4) * 0.5
+    });
+  }
+
+  // Shockwave ripples
+  const ripples = [
+    { progress: 0.1, maxR: 420 },
+    { progress: 0.55, maxR: 560 }
+  ];
+
+  function render(now) {
+    if (dismissed) return;
+    const elapsed = now - startTime;
+    const progress = Math.min(1, elapsed / INTRO_DURATION);
+
+    if (progressFill) {
+      progressFill.style.width = (progress * 100) + '%';
     }
-  });
+
+    if (progress >= 1) {
+      dismiss();
+      return;
+    }
+
+    ctx.clearRect(0, 0, width, height);
+
+    // Smooth tilt lerp
+    tiltX += (mouseX * 24 - tiltX) * 0.06;
+    tiltY += (mouseY * 16 - tiltY) * 0.06;
+
+    const t = elapsed * 0.001;
+    const cx = width * 0.5 + tiltX;
+    const cy = height * 0.38 + tiltY + Math.sin(t * 1.6) * 10;
+    const rad = Math.min(Math.max(width * 0.075, 68), 92);
+
+    // 1. Cinematic Background Nebula & Ambient Glow
+    const bgGlow = ctx.createRadialGradient(cx, cy, rad * 0.3, cx, cy, Math.max(width, height) * 0.65);
+    bgGlow.addColorStop(0, 'rgba(0, 255, 0, 0.14)');
+    bgGlow.addColorStop(0.3, 'rgba(0, 255, 0, 0.05)');
+    bgGlow.addColorStop(0.65, 'rgba(200, 150, 40, 0.025)');
+    bgGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = bgGlow;
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. 3D Floating Particle Stardust
+    particles.forEach(p => {
+      p.y -= p.vy;
+      if (p.y < -0.8) p.y = 0.8;
+      const screenX = cx + (p.x * width * 0.55) / p.z + tiltX * (1 - p.z * 0.5);
+      const screenY = cy + (p.y * height * 0.55) / p.z + tiltY * (1 - p.z * 0.5);
+      const pSize = (p.size / p.z) * (1 + 0.3 * Math.sin(t * 2.5 + p.twinkleOffset));
+      const alpha = Math.max(0.1, (0.55 + 0.35 * Math.sin(t * 3 + p.twinkleOffset)) / (p.z * 1.2));
+
+      ctx.save();
+      ctx.fillStyle = p.isGreen ? `rgba(0, 255, 0, ${alpha})` : `rgba(255, 230, 160, ${alpha * 0.85})`;
+      if (p.isGreen) {
+        ctx.shadowColor = '#00ff00';
+        ctx.shadowBlur = 8;
+      }
+      ctx.beginPath();
+      ctx.arc(screenX, screenY, Math.max(0.6, pSize), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+
+    // 3. Gravitational Golden Syrup Shockwave Waves
+    ripples.forEach(rip => {
+      rip.progress = (rip.progress + 0.0035) % 1;
+      const r = rad + rip.progress * rip.maxR;
+      const a = (1 - rip.progress) * 0.35;
+      ctx.save();
+      ctx.strokeStyle = `rgba(0, 255, 0, ${a * 0.75})`;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, r, r * 0.42, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = `rgba(240, 185, 60, ${a * 0.45})`;
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, r * 0.92, r * 0.39, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    });
+
+    // 4. Gyroscopic 3D Orbital Laser Rings
+    ctx.save();
+    // Orbital Ring 1 (Tilted 38deg clockwise)
+    const ring1Rot = t * 0.45;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(0.62);
+    ctx.strokeStyle = 'rgba(0, 255, 0, 0.45)';
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([8, 14]);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rad * 1.85, rad * 0.65, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Orbital Laser Particle on Ring 1
+    const sat1X = Math.cos(ring1Rot) * rad * 1.85;
+    const sat1Y = Math.sin(ring1Rot) * rad * 0.65;
+    ctx.fillStyle = '#00ff00';
+    ctx.shadowColor = '#00ff00';
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.arc(sat1X, sat1Y, 4.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Orbital Ring 2 (Tilted -42deg counter-clockwise)
+    const ring2Rot = -t * 0.38;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(-0.73);
+    ctx.strokeStyle = 'rgba(0, 255, 0, 0.32)';
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([4, 10]);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rad * 2.35, rad * 0.72, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Orbital Laser Particle on Ring 2
+    const sat2X = Math.cos(ring2Rot) * rad * 2.35;
+    const sat2Y = Math.sin(ring2Rot) * rad * 0.72;
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = '#00ff00';
+    ctx.shadowBlur = 16;
+    ctx.beginPath();
+    ctx.arc(sat2X, sat2Y, 3.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.restore();
+
+    // 5. The Grand 3D Kinetic King Rosogolla Sweet
+    ctx.save();
+    // Ambient drop shadow beneath the sweet
+    const sweetShadow = ctx.createRadialGradient(cx, cy + rad * 0.85, 10, cx, cy + rad * 0.85, rad * 1.4);
+    sweetShadow.addColorStop(0, 'rgba(0, 255, 0, 0.22)');
+    sweetShadow.addColorStop(0.4, 'rgba(0, 0, 0, 0.75)');
+    sweetShadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = sweetShadow;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + rad * 0.85, rad * 1.25, rad * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Organic Spongy Chhena Contour
+    ctx.beginPath();
+    const NUM_PTS = 40;
+    const sweetAngle = t * 0.55;
+    for (let pt = 0; pt <= NUM_PTS; pt++) {
+      const phi = (pt / NUM_PTS) * Math.PI * 2;
+      const deform = 1 + 0.026 * Math.sin(phi * 4 + sweetAngle) + 0.018 * Math.cos(phi * 6 - sweetAngle * 1.5);
+      const px = cx + Math.cos(phi) * rad * deform;
+      const py = cy + Math.sin(phi) * rad * deform;
+      if (pt === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+
+    // Multi-Stage Spherical Radial Lighting
+    const lightX = cx - rad * 0.32;
+    const lightY = cy - rad * 0.35;
+    const sweetGrad = ctx.createRadialGradient(lightX, lightY, rad * 0.06, cx, cy, rad * 1.05);
+    sweetGrad.addColorStop(0, '#ffffff');       // Specular bright light
+    sweetGrad.addColorStop(0.12, '#fffef6');    // Pure fresh curd
+    sweetGrad.addColorStop(0.46, '#fcf4e4');    // Creamy Bengali milk body
+    sweetGrad.addColorStop(0.72, '#f3dcba');    // Sugar syrup infusion
+    sweetGrad.addColorStop(0.92, '#dfba86');    // Deep amber syrup edge
+    sweetGrad.addColorStop(1, '#bc9052');       // Ambient warm rim shadow
+
+    ctx.fillStyle = sweetGrad;
+    ctx.shadowColor = 'rgba(0, 255, 0, 0.4)';
+    ctx.shadowBlur = 32;
+    ctx.fill();
+    ctx.shadowColor = 'transparent';
+
+    // 3D Micro-Pores rotating across the sweet
+    pores.forEach(p => {
+      const rotY = sweetAngle * 0.75;
+      const px = p.x * Math.cos(rotY) - p.z * Math.sin(rotY);
+      const pz = p.x * Math.sin(rotY) + p.z * Math.cos(rotY);
+      const py = p.y;
+
+      if (pz > -0.15) {
+        const poreX = cx + px * rad * 0.88;
+        const poreY = cy + py * rad * 0.88;
+
+        ctx.fillStyle = 'rgba(165, 125, 80, 0.38)';
+        ctx.beginPath();
+        ctx.arc(poreX, poreY, p.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.beginPath();
+        ctx.arc(poreX - 0.5, poreY - 0.5, p.size * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+
+    // Curving Specular Glaze Sheen
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.72)';
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(cx, cy, rad * 0.74, -Math.PI * 0.88, -Math.PI * 0.46);
+    ctx.stroke();
+
+    // Glistening sugar syrup crystal droplet
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(lightX + 2, lightY + 2, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Pistachio slivers in vibrant #00ff00 orbiting on the top
+    for (let g = 0; g < 4; g++) {
+      const gAngle = sweetAngle + g * (Math.PI * 0.5);
+      const gx = cx + Math.cos(gAngle) * (rad * 0.28);
+      const gy = cy - rad * 0.22 + Math.sin(gAngle) * (rad * 0.16);
+
+      ctx.save();
+      ctx.translate(gx, gy);
+      ctx.rotate(gAngle * 1.5);
+      ctx.fillStyle = '#00ff00';
+      ctx.shadowColor = '#00ff00';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 3.8, 1.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.restore();
+
+    animId = requestAnimationFrame(render);
+  }
+
+  animId = requestAnimationFrame(render);
 }
 
 function setupRosogollaBowl() {
