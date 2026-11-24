@@ -96,3 +96,7 @@ dialog[data-view="voice"] .modal-top {margin-bottom:0}
   .hero p {margin-bottom:15px}
   .hero-primary,.intro {padding-inline:8px;font-size:12px}
 }
+.request-error{max-width:650px;margin:10px 0;padding:10px 14px 14px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+.request-error p{margin:0 0 5px}
+.request-error .dialog-action{margin-right:9px}
+.request-error a{display:inline-block;margin:10px 9px 0 0}

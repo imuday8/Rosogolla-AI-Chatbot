@@ -39,10 +39,21 @@ async function gemini(path,key,body) {
   const data = await response.json();
   return {data,status:response.status,ok:response.ok};
 }
-const upstreamError = response => problem(
-  String(response.data.error?.message ?? 'Gemini could not complete this request.'),
-  response.status >= 400 && response.status <= 599 ? response.status : 502
-);
+function upstreamError(response) {
+  const message = String(response.data.error?.message ?? 'Gemini could not complete this request.');
+  const status = response.status >= 400 && response.status <= 599 ? response.status : 502;
+  if (/free tier is not available for this project|free.tier.unavailable|billing.*paid tier/i.test(message)) {
+    return json({
+      code:'GEMINI_PROJECT_UNAVAILABLE',
+      error:'Google has disabled free-tier Gemini access for this project. Use a key from an eligible project, or enable billing for this project in Google AI Studio.'
+    },status);
+  }
+  return problem(message,status);
+}
+
+function generate(model,key,body) {
+  return gemini('/v1beta/models/'+model+':generateContent',key,body);
+}
 
 async function modelTemperature(model,key,verify=false) {
   const cached = temperatureCache.get(model);
@@ -98,7 +109,12 @@ export default {async fetch(request, env={}) {
     if (key.length > 300) return problem('Check your Gemini API key.',400);
     if (path === '/api/connect') {
       const temperature = await modelTemperature(model,key,true);
-      return temperature.error || json({model,temperature:temperature.value});
+      if (temperature.error) return temperature.error;
+      const probe = await generate(model,key,{
+        contents:[{role:'user',parts:[{text:'Reply with OK.'}]}],
+        generationConfig:{temperature:temperature.value,maxOutputTokens:16}
+      });
+      return probe.ok ? json({model,temperature:temperature.value}) : upstreamError(probe);
     }
     if (path === '/api/live') {
       const temperature = await modelTemperature(liveModel,key);
@@ -117,7 +133,7 @@ export default {async fetch(request, env={}) {
       const contents = parseMessages(JSON.parse(body).messages);
       if (!contents) return problem('Check the message and supported attachment formats.',400);
       const {value:temperature} = await modelTemperature(model,key);
-      const result = await gemini('/v1beta/models/'+model+':generateContent',key,{contents,systemInstruction:{parts:[{text:instruction}]},generationConfig:{temperature}});
+      const result = await generate(model,key,{contents,systemInstruction:{parts:[{text:instruction}]},generationConfig:{temperature}});
       if (!result.ok) return upstreamError(result);
       const candidate = result.data.candidates?.[0];
       const reply = candidate?.content?.parts?.filter(part=>!part.thought).map(part=>part.text||'').join('');
