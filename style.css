@@ -101,7 +101,7 @@ dialog[data-view="voice"] .modal-top {margin-bottom:0}
 .request-error .dialog-action{margin-right:9px}
 .request-error a{display:inline-block;margin:10px 9px 0 0}
 .brand {font-size:clamp(17px,2.15vw,23px);letter-spacing:.015em;white-space:nowrap}
-.brand-logo {width:34px;height:34px;flex:none}
+.brand-logo {width:34px;height:34px;flex:none;border-radius:8px;object-fit:cover}
 
 
 /* Rotating Rosogolla Bowl */
