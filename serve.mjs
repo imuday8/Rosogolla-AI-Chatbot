@@ -17,4 +17,4 @@ createServer(async (incoming,outgoing)=>{
   } catch {
     outgoing.writeHead(500).end('Server error');
   }
-}).listen(port,'127.0.0.1',()=>console.log('Rosogolla is running at '+base));
+}).listen(port,'0.0.0.0',()=>console.log('Rosogolla is running at '+base));

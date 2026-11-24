@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "buildCommand": "node build.mjs",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.js" },
+    { "source": "/(.*)", "destination": "/public/$1" }
+  ]
+}
