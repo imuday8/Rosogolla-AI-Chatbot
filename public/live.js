@@ -107,7 +107,7 @@ export function startLive({authorize,onStatus,onTurn,onEnd,onActivity=()=>{},onC
             const data=formatSamples(samples,context.sampleRate);
             socket.send(JSON.stringify({realtimeInput:{audio:{data,mimeType:'audio/pcm;rate=16000'}}}));
           };
-          onStatus('Listening. Speak naturally or interrupt USION at any time.',true);
+          onStatus('Listening. Speak naturally or interrupt Rosogolla at any time.',true);
         }
         if(message.usageMetadata)usage=message.usageMetadata;
         const content=message.serverContent;

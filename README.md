@@ -1,12 +1,12 @@
-# USION
+# Rosogolla
 
-USION is a Gemini chat and live voice workspace with a black-and-lime palette and an audio-reactive orb, an original motion intro, and local chat history.
+Rosogolla is a Gemini chat and live voice workspace with a black-and-lime palette and an audio-reactive orb, an original motion intro, and local chat history.
 
 ## Run locally
 
 Run `npm start` from this directory with Node.js 22 or later. Open `http://localhost:4173`.
 
-Configure a [Gemini API key](https://aistudio.google.com/app/apikey) from a project with Gemini API access. For local runs, copy `.env.example` to the ignored `.env` file and fill in `GEMINI_API_KEY`. For hosted USION, set `GEMINI_API_KEY` as a private runtime secret. Chat and Live Voice use this server-managed key for all authorized site visitors.
+Configure a [Gemini API key](https://aistudio.google.com/app/apikey) from a project with Gemini API access. For local runs, copy `.env.example` to the ignored `.env` file and fill in `GEMINI_API_KEY`. For hosted Rosogolla, set `GEMINI_API_KEY` as a private runtime secret. Chat and Live Voice use this server-managed key for all authorized site visitors.
 
 To activate **Sign in with Google**, create a [Google OAuth Web client ID](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid), add the app's exact origin to Authorized JavaScript origins, and set `GOOGLE_CLIENT_ID` in `.env` or the hosted runtime. Restart or redeploy to load it. The server verifies Google's ID token. Chat history is stored in the browser, with separate guest and signed-in histories.
 

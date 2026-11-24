@@ -2,16 +2,17 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#090a08">
-<title>USION — A space for your curiosity</title>
+<link rel="icon" type="image/svg+xml" href="/rosogolla.svg">
+<title>Rosogolla — A space for your curiosity</title>
 <meta name="description" content="A Gemini-powered workspace for ideas, documents and live conversations.">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/style.css?v=3"><script type="module" src="/app.js?v=6"></script>
+<link rel="stylesheet" href="/style.css?v=4"><script type="module" src="/app.js?v=7"></script>
 </head>
 <body>
 <div id="shell">
 <aside id="sidebar" aria-label="Workspace navigation">
-  <div class="brand"><span class="brand-icon" data-icon="spark"></span>USION<span class="brand-dot">.</span></div>
+  <div class="brand"><img class="brand-logo" src="/rosogolla.svg" width="34" height="34" alt="">Rosogolla</div>
   <button id="new" class="new"><span data-icon="plus"></span> New chat <kbd>⌥ N</kbd></button>
   <button id="search" class="side-action"><span data-icon="search"></span> Search chats</button>
   <section class="history"><h2>Chat history</h2><div id="history"></div></section>
@@ -29,7 +30,7 @@
     <div class="hero">
       <div class="hero-copy"><div class="eyebrow"><span data-icon="spark"></span> YOUR AI WORKSPACE</div>
         <h1>What’s on<br>your <em>mind?</em></h1>
-        <p>Think it through, make something new, or just talk. USION is here for it.</p>
+        <p>Think it through, make something new, or just talk. Rosogolla is here for it.</p>
         <div class="hero-actions"><button id="hero-live" class="hero-primary"><span data-icon="wave"></span> Start live voice</button><button id="intro" class="intro"><span data-icon="play"></span> Watch intro</button></div>
       </div>
       <div class="hero-art" aria-hidden="true"><div class="orbit"><div class="orb"></div></div></div>
@@ -45,7 +46,7 @@
 </div>
 <div class="composer-region"><form id="composer">
   <div id="attachments"></div>
-  <textarea id="prompt" rows="2" placeholder="Message USION..." aria-label="Message USION"></textarea>
+  <textarea id="prompt" rows="2" placeholder="Message Rosogolla..." aria-label="Message Rosogolla"></textarea>
   <div class="composer-actions"><div><button type="button" id="attach" class="icon-button" data-icon="clip" aria-label="Attach a document" title="Attach a document"></button><button type="button" id="dictate" class="icon-button" data-icon="mic" aria-label="Dictate or say send message" title="Dictate or say “send message”"></button><input id="files" type="file" multiple accept=".pdf,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp" hidden></div><div><button type="button" id="live" class="live"><span data-icon="wave"></span> Live voice</button><button class="send" id="send" data-icon="send" aria-label="Send message" title="Send message"></button></div></div>
 </form><footer>Powered by Gemini <span>·</span> Creative mode <span>·</span> AI can make mistakes.</footer></div>
 </main>

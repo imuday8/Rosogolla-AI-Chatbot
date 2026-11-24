@@ -1,4 +1,4 @@
-import {startLive} from './live.js';
+import {startLive} from './live.js?v=2';
 
 const $ = id => document.getElementById(id);
 const icons = {
@@ -177,7 +177,7 @@ function renderMessages(chat) {
   messages.replaceChildren();
   for(const message of chat?.messages||[]) {
     const article=node('article','', 'message '+message.role);
-    article.append(node('div',message.role==='user'?'You':'USION','who'));
+    article.append(node('div',message.role==='user'?'You':'Rosogolla','who'));
     const body=node('div','','message-body');
     if (message.role==='model') format(body,message.text);
     else body.textContent=message.text;
@@ -208,7 +208,7 @@ function renderMessages(chat) {
     notice.append(action('Retry message',()=>sendChat(chat),'dialog-action'));
     messages.append(notice);
   }
-  if (chat?.pending) messages.append(node('p','USION is thinking…','dialog-copy'));
+  if (chat?.pending) messages.append(node('p','Rosogolla is thinking…','dialog-copy'));
   highlight();
 }
 function render(bottom=false) {
@@ -267,13 +267,13 @@ $('usage').onclick=()=>{
 };
 $('intro').onclick=()=>{
   const video=node('video');
-  video.src='/intro.mp4';video.controls=true;video.playsInline=true;
-  openDialog('Meet USION',video);
+  video.src='/intro.mp4?v=2';video.controls=true;video.playsInline=true;
+  openDialog('Meet Rosogolla',video);
   video.play().catch(()=>{});
 };
 function transcriptFor(chat) {
   return ['# '+chat.title,'',...chat.messages.flatMap(message=>[
-    '## '+(message.role==='user'?'You':'USION')+(message.voice?' · Live voice':''),'',message.text,
+    '## '+(message.role==='user'?'You':'Rosogolla')+(message.voice?' · Live voice':''),'',message.text,
     ...(message.names?.length?['','Attachments: '+message.names.join(', ')]:[]),
     ...(message.usage?['','Tokens: '+number(message.usage.totalTokenCount)]:[]),''
   ]),'Total tokens: '+number(usageFor(chat).total)].join('\n');
@@ -289,7 +289,7 @@ $('share').onclick=async()=>{
 $('export').onclick=()=>{
   const chat=getChat();if(!chat)return;
   const url=URL.createObjectURL(new Blob([transcriptFor(chat)],{type:'text/markdown;charset=utf-8'}));
-  const link=node('a');link.href=url;link.download='usion-'+(chat.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'transcript').slice(0,48)+'.md';
+  const link=node('a');link.href=url;link.download='rosogolla-'+(chat.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'transcript').slice(0,48)+'.md';
   link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 };
 document.querySelectorAll('[data-prompt]').forEach(button=>button.onclick=()=>{$('prompt').value=button.dataset.prompt;$('prompt').focus();});
@@ -503,7 +503,7 @@ function showLive() {
   orbit.setAttribute('aria-hidden','true');
   const orb=node('div','','orb');
   orbit.append(orb);
-  const status=node('p','Speak with USION in real time.','dialog-copy voice-status');
+  const status=node('p','Speak with Rosogolla in real time.','dialog-copy voice-status');
   status.setAttribute('role','status');
   const caption=node('p','','voice-caption');
   caption.hidden=true;
@@ -518,7 +518,7 @@ function showLive() {
     connectLive(stage,orb,status,caption);
   },'dialog-action');
   stage.append(orbit,status,caption,start);
-  openDialog('Live with USION',stage);
+  openDialog('Live with Rosogolla',stage);
   $('modal').dataset.view='voice';
 }
 $('hero-live').onclick=$('live').onclick=showLive;

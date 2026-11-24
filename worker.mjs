@@ -1,5 +1,5 @@
 const api = 'https://generativelanguage.googleapis.com';
-const instruction = 'You are USION, a thoughtful, creative AI assistant powered by Gemini. Respond in the language the user is speaking unless they request another language.';
+const instruction = 'You are Rosogolla, a thoughtful, creative AI assistant powered by Gemini. Respond in the language the user is speaking unless they request another language.';
 const json = (body, status = 200) => Response.json(body, {status, headers: {'Cache-Control':'no-store'}});
 const problem = (message, status) => json({error:message}, status);
 const mime = new Set(['application/pdf','image/png','image/jpeg','image/webp']);
