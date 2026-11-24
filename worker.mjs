@@ -1,13 +1,11 @@
-const api = 'https://generativelanguage.googleapis.com';
-const instruction = 'You are Rosogolla, a thoughtful, creative AI assistant powered by Gemini. Respond in the language the user is speaking unless they request another language.';
+const api = 'https://openrouter.ai/api/v1';
+const instruction = 'You are Rosogolla, a thoughtful, creative AI assistant. Respond in the language the user is speaking unless they request another language.';
 const json = (body, status = 200) => Response.json(body, {status, headers: {'Cache-Control':'no-store'}});
 const problem = (message, status) => json({error:message}, status);
 const mime = new Set(['application/pdf','image/png','image/jpeg','image/webp']);
-const defaultModel = 'gemini-3.8-flash';
-const defaultLive = 'gemini-3.8-live';
+const defaultModel = 'openrouter/free';
 const decode = value => Uint8Array.from(atob(value.replace(/-/g,'+').replace(/_/g,'/')), char => char.charCodeAt(0));
 const utf8 = new TextDecoder();
-const temperatureCache = new Map();
 let googleKeys;
 
 async function googleProfile(credential, clientId) {
@@ -32,70 +30,92 @@ async function googleProfile(credential, clientId) {
   return {id:claims.sub,name:claims.name||claims.email||'Google user',email:claims.email||''};
 }
 
-async function gemini(path,key,body) {
-  const headers = {'x-goog-api-key':key};
+async function openrouter(path, key, body) {
+  const headers = {
+    'Authorization': 'Bearer ' + key,
+    'HTTP-Referer': 'https://rosogolla.app',
+    'X-Title': 'Rosogolla'
+  };
   if (body) headers['Content-Type'] = 'application/json';
-  const response = await fetch(api + path, {headers, method:body?'POST':'GET',body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(90000)});
+  const response = await fetch(api + path, {
+    headers,
+    method: body ? 'POST' : 'GET',
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(90000)
+  });
   const data = await response.json();
-  return {data,status:response.status,ok:response.ok};
+  return {data, status: response.status, ok: response.ok};
 }
+
 function upstreamError(response) {
-  const message = String(response.data.error?.message ?? 'Gemini could not complete this request.');
+  const errObj = response.data.error;
+  const message = typeof errObj === 'object'
+    ? String(errObj?.message ?? 'OpenRouter could not complete this request.')
+    : String(errObj ?? 'OpenRouter could not complete this request.');
   const status = response.status >= 400 && response.status <= 599 ? response.status : 502;
-  if (/free tier is not available for this project|free.tier.unavailable|billing.*paid tier/i.test(message)) {
+  const code = typeof errObj === 'object' ? errObj?.code : undefined;
+  if (status === 402 || /insufficient.*credits|payment.*required|billing/i.test(message)) {
     return json({
-      code:'GEMINI_PROJECT_UNAVAILABLE',
-      error:'Google has disabled free-tier Gemini access for this project. Use a key from an eligible project, or enable billing for this project in Google AI Studio.'
-    },status);
+      code: 'OPENROUTER_CREDITS_EXHAUSTED',
+      error: 'OpenRouter credits have been exhausted. The site owner needs to add credits at openrouter.ai.'
+    }, 402);
   }
-  return problem(message,status);
-}
-
-function generate(model,key,body) {
-  return gemini('/v1beta/models/'+model+':generateContent',key,body);
-}
-
-async function modelTemperature(model,key,verify=false) {
-  const cached = temperatureCache.get(model);
-  if (!verify && cached?.until > Date.now()) return {value:cached.value};
-  const result = await gemini('/v1beta/models/' + model,key);
-  if (!result.ok) return verify ? {error:upstreamError(result)} : {value:cached?.value ?? 2};
-  const value = result.data.maxTemperature ?? 2;
-  temperatureCache.set(model,{value,until:Date.now()+3600000});
-  return {value};
+  if (status === 429 || code === 'rate_limit_exceeded') {
+    return json({
+      code: 'OPENROUTER_RATE_LIMITED',
+      error: 'Too many requests. Please wait a moment and try again.'
+    }, 429);
+  }
+  if (status === 401 || code === 'invalid_api_key') {
+    return json({
+      code: 'OPENROUTER_AUTH_ERROR',
+      error: 'The OpenRouter API key is invalid. The site owner needs to update it.'
+    }, 401);
+  }
+  return problem(message, status);
 }
 
 function parseMessages(messages) {
   if (!Array.isArray(messages) || messages.length < 1 || messages.length > 100) return;
-  const contents = [];
+  const result = [];
   for (const message of messages) {
     if (!message || !['user','model'].includes(message.role) || typeof message.text !== 'string' || message.text.length > 200000) return;
-    const parts = message.text ? [{text:message.text}] : [];
+    const role = message.role === 'model' ? 'assistant' : 'user';
     if (message.role === 'user' && message.files !== undefined) {
       if (!Array.isArray(message.files) || message.files.length > 4) return;
+      const content = [];
+      if (message.text) content.push({type: 'text', text: message.text});
       for (const file of message.files) {
         if (!file || typeof file.data !== 'string') return;
         if (file.mime === 'text/plain') {
           if (file.data.length > 1500000) return;
-          parts.push({text:'Attached file: '+String(file.name).slice(0,150)+'\n'+file.data});
+          content.push({type: 'text', text: 'Attached file: ' + String(file.name).slice(0, 150) + '\n' + file.data});
         } else {
           if (!mime.has(file.mime) || file.data.length > 7200000 || !/^[a-zA-Z0-9+/=]+$/.test(file.data)) return;
-          parts.push({inlineData:{mimeType:file.mime,data:file.data}});
+          content.push({type: 'image_url', image_url: {url: 'data:' + file.mime + ';base64,' + file.data}});
         }
       }
+      if (content.length) result.push({role, content});
+    } else {
+      if (message.text) result.push({role, content: message.text});
     }
-    if (parts.length) contents.push({role:message.role,parts});
   }
-  return contents.length && contents.at(-1).role === 'user' ? contents : undefined;
+  return result.length && result.at(-1).role === 'user' ? result : undefined;
 }
 
 export default {async fetch(request, env={}) {
   const url = new URL(request.url);
   const path = url.pathname;
-  const model = env.GEMINI_CHAT_MODEL || defaultModel;
-  const liveModel = env.GEMINI_LIVE_MODEL || defaultLive;
+  const model = env.OPENROUTER_MODEL || defaultModel;
+  const liveVoiceProvider = env.VOICE_PROVIDER || '';
   if (!path.startsWith('/api/')) return env.ASSETS ? env.ASSETS.fetch(request) : new Response('Not found',{status:404});
-  if (path === '/api/config' && request.method === 'GET') return json({model,liveModel,hasServerKey:!!env.GEMINI_API_KEY,googleClientId:env.GOOGLE_CLIENT_ID || ''});
+  if (path === '/api/config' && request.method === 'GET') return json({
+    model,
+    liveModel: '',
+    hasServerKey: !!env.OPENROUTER_API_KEY,
+    googleClientId: env.GOOGLE_CLIENT_ID || '',
+    liveVoiceEnabled: !!liveVoiceProvider
+  });
   if (request.method !== 'POST') return problem('Method not allowed.',405);
   if (request.headers.get('sec-fetch-site') === 'cross-site' || !request.headers.get('content-type')?.startsWith('application/json')) return problem('Invalid request.',403);
   if (Number(request.headers.get('content-length')) > 12000000) return problem('Attachments exceed the request limit.',413);
@@ -104,40 +124,54 @@ export default {async fetch(request, env={}) {
       try {return json(await googleProfile((await request.json()).credential,env.GOOGLE_CLIENT_ID));}
       catch {return problem('Google sign-in could not be verified.',401);}
     }
-    const key = env.GEMINI_API_KEY;
-    if (!key) return problem('The site owner needs to configure Gemini before chat or Live Voice can start.',503);
+    const key = env.OPENROUTER_API_KEY;
+    if (!key) return problem('The site owner needs to configure an OpenRouter API key before chat can start.',503);
     if (path === '/api/connect') {
-      const temperature = await modelTemperature(model,key,true);
-      if (temperature.error) return temperature.error;
-      const probe = await generate(model,key,{
-        contents:[{role:'user',parts:[{text:'Reply with OK.'}]}],
-        generationConfig:{temperature:temperature.value,maxOutputTokens:16}
+      const probe = await openrouter('/chat/completions', key, {
+        model,
+        messages: [{role: 'user', content: 'Reply with OK.'}],
+        max_tokens: 16
       });
-      return probe.ok ? json({model,temperature:temperature.value}) : upstreamError(probe);
+      if (!probe.ok) return upstreamError(probe);
+      return json({model, temperature: 1});
     }
     if (path === '/api/live') {
-      const temperature = await modelTemperature(liveModel,key);
-      const setup = {model:'models/'+liveModel,generationConfig:{responseModalities:['AUDIO'],temperature:temperature.value},
-        inputAudioTranscription:{},outputAudioTranscription:{},systemInstruction:{parts:[{text:instruction}]}};
-      const result = await gemini('/v1alpha/auth_tokens',key,{
-        uses:1,expireTime:new Date(Date.now()+30*60000).toISOString(),
-        newSessionExpireTime:new Date(Date.now()+60000).toISOString(),
-        bidiGenerateContentSetup:setup
-      });
-      return result.ok ? json({token:result.data.name,setup}) : upstreamError(result);
+      if (!liveVoiceProvider) {
+        return json({
+          code: 'LIVE_VOICE_UNAVAILABLE',
+          error: 'Live voice is not available with OpenRouter. A compatible voice provider has not been configured.'
+        }, 501);
+      }
+      return problem('Voice provider not implemented.', 501);
     }
     if (path === '/api/chat') {
       const body = await request.text();
       if (body.length > 12000000) return problem('Attachments exceed the request limit.',413);
-      const contents = parseMessages(JSON.parse(body).messages);
-      if (!contents) return problem('Check the message and supported attachment formats.',400);
-      const {value:temperature} = await modelTemperature(model,key);
-      const result = await generate(model,key,{contents,systemInstruction:{parts:[{text:instruction}]},generationConfig:{temperature}});
+      const openRouterMessages = parseMessages(JSON.parse(body).messages);
+      if (!openRouterMessages) return problem('Check the message and supported attachment formats.',400);
+      const result = await openrouter('/chat/completions', key, {
+        model,
+        messages: [
+          {role: 'system', content: instruction},
+          ...openRouterMessages
+        ],
+        temperature: 1
+      });
       if (!result.ok) return upstreamError(result);
-      const candidate = result.data.candidates?.[0];
-      const reply = candidate?.content?.parts?.filter(part=>!part.thought).map(part=>part.text||'').join('');
-      return json({reply:reply || ('Gemini returned no text. ' + (result.data.promptFeedback?.blockReason ?? candidate?.finishReason ?? '')).trim(),
-        usage:result.data.usageMetadata || null,temperature});
+      const choice = result.data.choices?.[0];
+      const reply = choice?.message?.content || '';
+      const rawUsage = result.data.usage;
+      const usage = rawUsage ? {
+        promptTokenCount: rawUsage.prompt_tokens ?? 0,
+        candidatesTokenCount: rawUsage.completion_tokens ?? 0,
+        thoughtsTokenCount: 0,
+        totalTokenCount: rawUsage.total_tokens ?? (rawUsage.prompt_tokens ?? 0) + (rawUsage.completion_tokens ?? 0)
+      } : null;
+      return json({
+        reply: reply || ('The model returned no text. ' + (choice?.finish_reason ?? '')).trim(),
+        usage,
+        temperature: 1
+      });
     }
     return problem('Not found.',404);
   } catch (error) {

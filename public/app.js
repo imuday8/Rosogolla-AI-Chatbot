@@ -53,7 +53,7 @@ function restoreChats(id) {
 }
 let chats = restoreChats(profile?.id);
 let current = null;
-let config = {model:'gemini-3.8-flash',liveModel:'gemini-3.8-live'};
+let config = {model:'openrouter/free',liveModel:'',liveVoiceEnabled:false};
 let projectBlocked = false;
 let temperature = 2;
 let files = [];
@@ -202,7 +202,7 @@ function renderMessages(chat) {
     const notice=node('div','','request-error');
     const failure=typeof chat.failed==='object'?chat.failed:null;
     if(failure)notice.append(node('p',failure.message,'dialog-copy'));
-    if(failure?.code==='GEMINI_PROJECT_UNAVAILABLE'){
+    if(failure?.code==='OPENROUTER_CREDITS_EXHAUSTED'||failure?.code==='OPENROUTER_AUTH_ERROR'){
       notice.append(action('Gemini settings',settings,'dialog-action'));
     }
     notice.append(action('Retry message',()=>sendChat(chat),'dialog-action'));
@@ -236,10 +236,10 @@ function render(bottom=false) {
 }
 function settings() {
   const description=node('p',config.hasServerKey
-    ?'This site uses its server’s Gemini connection. You can chat without entering an API key.'
-    :'Chat and Live Voice will be available once the site owner connects Gemini on the server.','dialog-copy');
-  const status=node('p',config.model+' · Temperature '+temperature+' (maximum)','dialog-copy');
-  if(projectBlocked)openDialog('Settings',description,status,node('p','Google has blocked this site’s Gemini project. The site owner can check project access in Google AI Studio.','dialog-copy'));
+    ?'This site uses its server’s OpenRouter connection. You can chat without entering an API key.'
+    :'Chat will be available once the site owner configures an OpenRouter API key on the server.','dialog-copy');
+  const status=node('p',config.model+' · Temperature '+temperature,'dialog-copy');
+  if(projectBlocked)openDialog('Settings',description,status,node('p','OpenRouter returned an authorization or billing error. The site owner should check the API key and credits at openrouter.ai.','dialog-copy'));
   else openDialog('Settings',description,status);
 }
 $('settings').onclick=settings;
@@ -263,7 +263,7 @@ $('usage').onclick=()=>{
   }
   const total=node('div','','usage-total');
   total.append(node('span','Total'),node('strong',number(usage.total)+' tokens'));
-  openDialog('Token usage',node('p','Gemini-reported usage for this conversation. Input includes context sent with each request.','dialog-copy'),chart,total);
+  openDialog('Token usage',node('p','Token usage for this conversation. Input includes context sent with each request.','dialog-copy'),chart,total);
 };
 $('intro').onclick=()=>{
   const video=node('video');
@@ -345,7 +345,7 @@ async function sendChat(chat) {
     projectBlocked=false;
   } catch(error) {
     chat.failed={message:error.message,code:error.code};
-    if(error.code==='GEMINI_PROJECT_UNAVAILABLE')projectBlocked=true;
+    if(error.code==='OPENROUTER_CREDITS_EXHAUSTED'||error.code==='OPENROUTER_AUTH_ERROR')projectBlocked=true;
   }
   finally {
     pending=false;delete chat.pending;save();render(current===chat.id);
@@ -511,7 +511,7 @@ function showLive() {
     if(!config.hasServerKey){settings();return;}
     if(pending){toast('Wait for the current response before starting live voice.');return;}
     recording?.stop();
-    status.textContent='Connecting to Gemini and requesting microphone access…';
+    status.textContent='Connecting and requesting microphone access…';
     stage.dataset.state='connecting';
     caption.hidden=false;
     start.replaceWith(action('End session',()=>$('modal').close(),'dialog-action'));

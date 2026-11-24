@@ -78,16 +78,16 @@ export function startLive({authorize,onStatus,onTurn,onEnd,onActivity=()=>{},onC
     if(ended){stream.getTracks().forEach(track=>track.stop());return;}
     const {token,setup}=await authorize();
     if(ended)return;
-    if(!token)throw new Error('Gemini did not issue a live session token.');
+    if(!token)throw new Error('The server did not issue a live session token.');
     socket=new WebSocket(audioEndpoint+'?access_token='+encodeURIComponent(token));
     socket.binaryType='arraybuffer';
-    timeout=setTimeout(()=>stop('Gemini did not finish connecting. Close this window and try again.'),20000);
+    timeout=setTimeout(()=>stop('The voice service did not finish connecting. Close this window and try again.'),20000);
     socket.onopen=()=>socket.send(JSON.stringify({setup}));
     socket.onclose=event=>{
       const reason=event.reason?.trim();
-      stop(reason?'Gemini Live: '+reason:ready?'Gemini disconnected.':'Could not connect to Gemini Live. Check the key and Live model access.');
+      stop(reason?'Voice: '+reason:ready?'Voice session disconnected.':'Could not connect to the voice service.');
     };
-    socket.onerror=()=>stop('Could not connect to Gemini Live. Check the key and Live model access.');
+    socket.onerror=()=>stop('Could not connect to the voice service.');
     socket.onmessage=event=>{
       if(ended)return;
       try {
@@ -126,8 +126,8 @@ export function startLive({authorize,onStatus,onTurn,onEnd,onActivity=()=>{},onC
           }
           if(content.turnComplete)flush();
         }
-        if(message.goAway)onStatus('Gemini will end this session soon.',true);
-      } catch {stop('Gemini sent an unexpected live response.');}
+        if(message.goAway)onStatus('The voice session will end soon.',true);
+      } catch {stop('The voice service sent an unexpected response.');}
     };
   }
   Promise.resolve().then(connect).catch(error=>stop(error.name==='NotAllowedError'?'Microphone permission was denied.':error.message));
