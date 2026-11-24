@@ -104,9 +104,8 @@ export default {async fetch(request, env={}) {
       try {return json(await googleProfile((await request.json()).credential,env.GOOGLE_CLIENT_ID));}
       catch {return problem('Google sign-in could not be verified.',401);}
     }
-    const key = request.headers.get('x-usion-gemini-key') || env.GEMINI_API_KEY;
-    if (!key) return problem('Connect a Gemini API key in Settings first.',401);
-    if (key.length > 300) return problem('Check your Gemini API key.',400);
+    const key = env.GEMINI_API_KEY;
+    if (!key) return problem('The site owner needs to configure Gemini before chat or Live Voice can start.',503);
     if (path === '/api/connect') {
       const temperature = await modelTemperature(model,key,true);
       if (temperature.error) return temperature.error;

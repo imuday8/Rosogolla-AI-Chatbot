@@ -54,7 +54,6 @@ function restoreChats(id) {
 let chats = restoreChats(profile?.id);
 let current = chats[0]?.id || null;
 let config = {model:'gemini-3.8-flash',liveModel:'gemini-3.8-live'};
-let key = '';
 let projectBlocked = false;
 let generationVerified = false;
 let temperature = 2;
@@ -79,9 +78,8 @@ function toast(text) {
   clearTimeout(toastTimer);
   toastTimer=setTimeout(()=>$('toast').hidden=true,5500);
 }
-async function api(path,body={},apiKey=key) {
+async function api(path,body={}) {
   const headers={'Content-Type':'application/json'};
-  if (apiKey) headers['x-usion-gemini-key']=apiKey;
   const response=await fetch('/api/'+path,{method:'POST',headers,body:JSON.stringify(body)});
   const data=await response.json().catch(()=>({}));
   if (!response.ok) {
@@ -206,7 +204,7 @@ function renderMessages(chat) {
     const failure=typeof chat.failed==='object'?chat.failed:null;
     if(failure)notice.append(node('p',failure.message,'dialog-copy'));
     if(failure?.code==='GEMINI_PROJECT_UNAVAILABLE'){
-      notice.append(action('Gemini settings',settings,'dialog-action'),billingLink());
+      notice.append(action('Gemini settings',settings,'dialog-action'));
     }
     notice.append(action('Retry message',()=>sendChat(chat),'dialog-action'));
     messages.append(notice);
@@ -230,7 +228,7 @@ function render(bottom=false) {
   if (!chats.length) $('history').append(node('p','Your chats will appear here.','empty-history'));
   $('token-count').textContent=number(usageFor(chat).total)+' tokens';
   $('connect').classList.toggle('ready',generationVerified&&!projectBlocked);
-  $('connection-label').textContent=projectBlocked?'Gemini access blocked':generationVerified?'Gemini connected':config.hasServerKey?'Gemini key configured':'Connect Gemini';
+  $('connection-label').textContent=projectBlocked?'Gemini access blocked':generationVerified?'Gemini connected':config.hasServerKey?'Gemini ready':'Gemini setup pending';
   $('account-name').textContent=profile?.name||'Guest workspace';
   $('account-detail').textContent=profile?.email||'Sign in with Google';
   $('export').disabled=$('share').disabled=!chat?.messages.length;
@@ -239,47 +237,13 @@ function render(bottom=false) {
   renderMessages(chat);
   if (bottom) $('scroll').scrollTop=$('scroll').scrollHeight;
 }
-function billingLink() {
-  const link=node('a','Open Google AI Studio billing','dialog-secondary');
-  link.href='https://aistudio.google.com/billing';link.target='_blank';link.rel='noopener noreferrer';
-  return link;
-}
 function settings() {
-  const description=node('p','Paste a Gemini API key from Google AI Studio. The key is held in this tab until you reload or disconnect. Connecting sends a short Gemini test request that may count toward usage.','dialog-copy');
-  const label=node('label','Gemini API key','field');
-  const input=node('input');
-  input.type='password';input.autocomplete='off';input.placeholder=key?'Connected for this tab':'Paste your Gemini API key';
-  label.append(input);
-  const link=node('a','Get a Gemini API key','dialog-secondary');
-  link.href='https://aistudio.google.com/app/apikey';link.target='_blank';link.rel='noopener noreferrer';
+  const description=node('p',config.hasServerKey
+    ?'This site uses its server’s Gemini connection. You can chat without entering an API key.'
+    :'Chat and Live Voice will be available once the site owner connects Gemini on the server.','dialog-copy');
   const status=node('p',config.model+' · Temperature '+temperature+' (maximum)','dialog-copy');
-  status.setAttribute('role','status');
-  const billing=billingLink();
-  billing.hidden=!projectBlocked;
-  const connect=action('Connect',async()=>{
-    const value=input.value.trim();
-    if(!value){status.textContent='Enter a Gemini API key.';return;}
-    connect.disabled=true;
-    status.textContent='Checking whether this project can generate replies…';
-    try {
-      const result=await api('connect',{},value);
-      key=value;temperature=result.temperature;generationVerified=true;projectBlocked=false;
-      input.value='';render();
-      $('modal').close();toast('Gemini connected.');
-    } catch(error) {
-      status.textContent=error.message;
-      billing.hidden=error.code!=='GEMINI_PROJECT_UNAVAILABLE';
-      if(!billing.hidden&&(!generationVerified||value===key)) {
-        projectBlocked=true;
-        render();
-      }
-    }
-    finally {connect.disabled=false;}
-  },'dialog-action');
-  input.addEventListener('keydown',event=>{if(event.key==='Enter')connect.click();});
-  const reset=action('Disconnect local key',()=>{key='';projectBlocked=false;generationVerified=false;render();$('modal').close();toast('Local key disconnected.');},'dialog-secondary');
-  reset.hidden=!key;
-  openDialog('Settings',description,label,connect,link,status,billing,reset);
+  if(projectBlocked)openDialog('Settings',description,status,node('p','Google has blocked this site’s Gemini project. The site owner can check project access in Google AI Studio.','dialog-copy'));
+  else openDialog('Settings',description,status);
 }
 $('settings').onclick=$('connect').onclick=settings;
 $('new').onclick=newChat;
@@ -365,7 +329,7 @@ $('files').onchange=async()=>{
 };
 async function sendChat(chat) {
   if(pending)return;
-  if(!key&&!config.hasServerKey){settings();return;}
+  if(!config.hasServerKey){settings();return;}
   pending=true;chat.pending=true;delete chat.failed;render(current===chat.id);
   try {
     let contextSize=0;
@@ -395,7 +359,7 @@ $('composer').onsubmit=event=>{
   if(pending||readingFiles)return;
   const text=$('prompt').value.trim()||(files.length?'Please help me understand the attached material.':'');
   if(!text)return;
-  if(!key&&!config.hasServerKey){settings();return;}
+  if(!config.hasServerKey){settings();return;}
   const chat=getChat()||createChat(text);
   if(chat.failed) {
     toast('Retry the previous message or start a new chat.');
@@ -530,7 +494,7 @@ $('account').onclick=async()=>{
       await googleScript;
     }
     google.accounts.id.initialize({client_id:config.googleClientId,callback:async({credential})=>{
-      try{switchProfile(await api('google',{credential},''));}catch(error){status.textContent=error.message;}
+      try{switchProfile(await api('google',{credential}));}catch(error){status.textContent=error.message;}
     }});
     google.accounts.id.renderButton(container,{theme:'filled_black',size:'large',text:'signin_with'});
   }catch{status.textContent='Google sign-in could not load.';}
@@ -547,7 +511,7 @@ function showLive() {
   const caption=node('p','','voice-caption');
   caption.hidden=true;
   const start=action('Start conversation',()=>{
-    if(!key&&!config.hasServerKey){settings();return;}
+    if(!config.hasServerKey){settings();return;}
     if(pending){toast('Wait for the current response before starting live voice.');return;}
     recording?.stop();
     status.textContent='Connecting to Gemini and requesting microphone access…';

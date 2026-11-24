@@ -6,7 +6,7 @@ USION is a Gemini chat and live voice workspace with a black-and-lime palette an
 
 Run `npm start` from this directory with Node.js 22 or later. Open `http://localhost:4173`.
 
-Open **Settings** and connect a [Gemini API key](https://aistudio.google.com/app/apikey). The tab keeps the key in memory until reload or disconnect. For a local installation with a preconfigured key, copy `.env.example` to `.env` and fill in `GEMINI_API_KEY`. Hosted installations should use the platform's private runtime configuration for a shared key.
+Configure a [Gemini API key](https://aistudio.google.com/app/apikey) from a project with Gemini API access. For local runs, copy `.env.example` to the ignored `.env` file and fill in `GEMINI_API_KEY`. For hosted USION, set `GEMINI_API_KEY` as a private runtime secret. Chat and Live Voice use this server-managed key for all authorized site visitors.
 
 To activate **Sign in with Google**, create a [Google OAuth Web client ID](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid), add the app's exact origin to Authorized JavaScript origins, and set `GOOGLE_CLIENT_ID` in `.env` or the hosted runtime. Restart or redeploy to load it. The server verifies Google's ID token. Chat history is stored in the browser, with separate guest and signed-in histories.
 
