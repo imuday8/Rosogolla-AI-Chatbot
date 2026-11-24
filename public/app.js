@@ -1151,34 +1151,58 @@ async function sendChat(chat) {
     pending=false;delete chat.pending;save();render(current===chat.id);
   }
 }
+function submitPrompt() {
+  if (pending || readingFiles) return;
+  const promptEl = $('prompt');
+  const text = promptEl ? promptEl.value.trim() : '';
+  const promptText = text || (files.length ? 'Please help me understand the attached material.' : '');
+  if (!promptText) return;
+  if (!config.hasServerKey && !clientKey) { settings(); return; }
+  const chat = getChat() || createChat(promptText);
+  if (chat.failed) {
+    toast('Retry the previous message or start a new chat.');
+    return;
+  }
+  const id = crypto.randomUUID();
+  if (files.length) fileCache.set(id, files);
+  chat.messages.push({ id, role: 'user', text: promptText, names: files.map(file => file.name) });
+  files = [];
+  if (promptEl) promptEl.value = '';
+  save();
+  sendChat(chat);
+}
+
 const sendBtn = $('send');
 if (sendBtn) {
   sendBtn.onclick = (e) => {
     e.preventDefault();
-    const composer = $('composer');
-    if (composer) composer.requestSubmit();
+    submitPrompt();
   };
 }
-$('composer').onsubmit=event=>{
-  event.preventDefault();
-  event.preventDefault();
-  if(pending||readingFiles)return;
-  const text=$('prompt').value.trim()||(files.length?'Please help me understand the attached material.':'');
-  if(!text)return;
-  if(!config.hasServerKey && !clientKey){settings();return;}
-  const chat=getChat()||createChat(text);
-  if(chat.failed) {
-    toast('Retry the previous message or start a new chat.');
-    return;
-  }
-  const id=crypto.randomUUID();
-  if(files.length)fileCache.set(id,files);
-  chat.messages.push({id,role:'user',text,names:files.map(file=>file.name)});
-  files=[];$('prompt').value='';save();sendChat(chat);
-};
-$('prompt').onkeydown=event=>{
-  if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();$('composer').requestSubmit();}
-};
+
+const composerForm = $('composer');
+if (composerForm) {
+  composerForm.onsubmit = (e) => {
+    e.preventDefault();
+    submitPrompt();
+  };
+}
+
+const promptInput = $('prompt');
+if (promptInput) {
+  promptInput.onkeydown = (event) => {
+    const isEnter = event.key === 'Enter' || event.key === 'Return' || event.keyCode === 13;
+    if (isEnter && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      event.stopPropagation();
+      submitPrompt();
+    } else if (isEnter && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      event.stopPropagation();
+      submitPrompt();
+    }
+  };
+}
 function highlight() {
   const query=$('findbar').hidden?'':$('find-input').value.trim();
   const marks=[];

@@ -469,3 +469,7 @@ dialog[data-view="voice"] .modal-top {margin-bottom:0}
     transform: translate(6%, -6%);
   }
 }
+
+.composer-region {
+  padding-bottom: 24px;
+}
