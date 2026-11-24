@@ -24,7 +24,7 @@
   </div>
 </aside>
 <main>
-<header id="navigation"><div class="workspace"><button id="menu" class="icon-button" aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation" data-icon="menu"></button><span id="breadcrumb">Workspace</span></div><div class="header-actions"><button id="usage" class="pill"><span data-icon="activity"></span><span id="token-count">0 tokens</span></button></div></header>
+<header id="navigation"><div class="workspace"><button id="menu" class="icon-button" aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation" data-icon="menu"></button><span id="breadcrumb">Workspace</span></div><div class="header-actions"><button id="voice-toggle" class="pill voice-pill" aria-label="Toggle background voice" title="Background Voice"><span data-icon="wave"></span><span id="voice-toggle-text">Voice ON</span></button><button id="usage" class="pill"><span data-icon="activity"></span><span id="token-count">0 tokens</span></button></div></header>
 <div id="scroll" tabindex="0" aria-label="Conversation">
   <section id="welcome">
     <div class="hero">
@@ -53,33 +53,30 @@
 </div>
 <dialog id="modal" aria-labelledby="modal-title"><div class="modal-top"><h2 id="modal-title"></h2><button id="close-modal" class="icon-button" data-icon="close" aria-label="Close dialog"></button></div><div id="modal-content"></div></dialog>
 <div id="toast" role="status" hidden></div>
-<div id="intro-overlay" class="intro-overlay" role="dialog" aria-modal="true" aria-label="Rosogolla Introduction">
-  <div class="intro-backdrop"></div>
-  <div class="intro-container">
-    <div class="intro-topbar">
-      <div class="intro-brand">
-        <img class="brand-logo" src="./rosogolla.svg" width="28" height="28" alt="">
-        <span>Rosogolla</span>
-      </div>
-      <div class="intro-actions">
-        <button type="button" id="intro-mute" class="intro-pill" aria-label="Toggle mute">
-          <span id="intro-mute-icon" data-icon="activity"></span>
-          <span id="intro-mute-text">Sound on</span>
-        </button>
-        <button type="button" id="intro-skip" class="intro-pill intro-skip-pill" aria-label="Skip introduction">
-          <span>Skip</span>
-          <span data-icon="close"></span>
-        </button>
-      </div>
+<audio id="bg-voice" src="./voice.mp3" loop preload="auto"></audio>
+<div id="intro-overlay" class="intro-overlay fullscreen-intro" role="dialog" aria-modal="true" aria-label="Rosogolla Introduction">
+  <video id="intro-video" class="intro-video-fullscreen" src="./intro.mp4?v=3" playsinline autoplay muted loop></video>
+  <div class="intro-overlay-vignette" aria-hidden="true"></div>
+  <div class="intro-floating-header">
+    <div class="intro-brand">
+      <img class="brand-logo" src="./rosogolla.svg" width="32" height="32" alt="">
+      <span>Rosogolla</span>
+      <span class="intro-green-dot"></span>
     </div>
-    <div class="intro-media">
-      <video id="intro-video" src="./intro.mp4?v=2" playsinline autoplay muted></video>
-      <div class="intro-corner-glow" aria-hidden="true"></div>
+    <div class="intro-floating-controls">
+      <button type="button" id="intro-mute" class="intro-pill" aria-label="Toggle mute">
+        <span id="intro-mute-icon" data-icon="activity"></span>
+        <span id="intro-mute-text">Sound on</span>
+      </button>
+      <button type="button" id="intro-skip" class="intro-pill intro-skip-pill" aria-label="Enter workspace">
+        <span>Enter workspace</span>
+        <span data-icon="chevron"></span>
+      </button>
     </div>
-    <div class="intro-bottom">
-      <div class="intro-progress-track">
-        <div id="intro-progress-fill" class="intro-progress-bar"></div>
-      </div>
+  </div>
+  <div class="intro-floating-bottom">
+    <div class="intro-progress-track">
+      <div id="intro-progress-fill" class="intro-progress-bar"></div>
     </div>
   </div>
 </div>

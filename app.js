@@ -364,6 +364,50 @@ $('usage').onclick=()=>{
   total.append(node('span','Total'),node('strong',number(usage.total)+' tokens'));
   openDialog('Token usage',node('p','Token usage for this conversation. Input includes context sent with each request.','dialog-copy'),chart,total);
 };
+function setupBackgroundVoice() {
+  const audio = $('bg-voice');
+  const toggleBtn = $('voice-toggle');
+  const statusText = $('voice-toggle-text');
+  if (!audio) return;
+
+  audio.loop = true;
+  let isPlaying = false;
+
+  function playVoice() {
+    if (isPlaying) return;
+    audio.play().then(() => {
+      isPlaying = true;
+      if (toggleBtn) toggleBtn.classList.add('voice-pill');
+      if (statusText) statusText.textContent = 'Voice ON';
+    }).catch(() => {});
+  }
+
+  function pauseVoice() {
+    audio.pause();
+    isPlaying = false;
+    if (toggleBtn) toggleBtn.classList.remove('voice-pill');
+    if (statusText) statusText.textContent = 'Voice OFF';
+  }
+
+  if (toggleBtn) {
+    toggleBtn.onclick = () => {
+      if (isPlaying) pauseVoice();
+      else playVoice();
+    };
+  }
+
+  // Auto-play voice on any user interaction (clicks, typing, touching)
+  const gestures = ['click', 'keydown', 'touchstart', 'pointerdown'];
+  function onGesture() {
+    playVoice();
+    gestures.forEach(g => document.removeEventListener(g, onGesture));
+  }
+  gestures.forEach(g => document.addEventListener(g, onGesture, { passive: true }));
+
+  // Expose to window for intro overlay to trigger directly
+  window.rosogollaVoice = { play: playVoice, pause: pauseVoice };
+}
+
 function setupIntroOverlay() {
   const overlay = $('intro-overlay');
   const video = $('intro-video');
@@ -378,10 +422,12 @@ function setupIntroOverlay() {
     if (dismissed) return;
     dismissed = true;
     overlay.classList.add('fade-out');
+    // Start continuous background voice
+    if (window.rosogollaVoice) window.rosogollaVoice.play();
     setTimeout(() => {
       overlay.hidden = true;
       try { video.pause(); } catch (_) {}
-    }, 450);
+    }, 550);
   }
 
   video.play().catch(() => {});
@@ -398,15 +444,17 @@ function setupIntroOverlay() {
   if (skipBtn) skipBtn.onclick = () => dismiss();
 
   overlay.addEventListener('click', (e) => {
-    if (e.target.classList.contains('intro-backdrop') || e.target === overlay) {
+    if (e.target.classList.contains('intro-overlay-vignette') || e.target === overlay) {
       dismiss();
     }
   });
 
   if (muteBtn) {
-    muteBtn.onclick = () => {
+    muteBtn.onclick = (e) => {
+      e.stopPropagation();
       video.muted = !video.muted;
       if (muteText) muteText.textContent = video.muted ? 'Sound on' : 'Mute';
+      if (!video.muted && window.rosogollaVoice) window.rosogollaVoice.play();
     };
   }
 
@@ -432,36 +480,53 @@ function setupRosogollaBowl() {
   ctx.scale(dpr, dpr);
 
   let angle = 0;
-  let speed = 0.014;
-  let targetSpeed = 0.014;
+  let speed = 0.013;
+  let targetSpeed = 0.013;
   let mouseTiltX = 0;
   let mouseTiltY = 0;
   let currentTiltX = 0;
   let currentTiltY = 0;
 
+  // 7 authentic plump spongy rosogollas in natural mound
   const sweets = [
-    { x: 0, y: -15, z: 0, r: 35 },
-    { x: 58, y: -9, z: 0, r: 30 },
-    { x: 29, y: -7, z: 50.2, r: 30 },
-    { x: -29, y: -10, z: 50.2, r: 30 },
-    { x: -58, y: -8, z: 0, r: 30 },
-    { x: -29, y: -9, z: -50.2, r: 30 },
-    { x: 29, y: -11, z: -50.2, r: 30 }
+    { x: 0, y: -16, z: 0, r: 36, seed: 1.2 },       // Center king rosogolla
+    { x: 56, y: -9, z: 0, r: 31, seed: 2.7 },
+    { x: 28, y: -7, z: 49, r: 31, seed: 4.1 },
+    { x: -28, y: -10, z: 49, r: 31, seed: 5.6 },
+    { x: -56, y: -8, z: 0, r: 31, seed: 0.9 },
+    { x: -28, y: -9, z: -49, r: 30, seed: 3.3 },
+    { x: 28, y: -11, z: -49, r: 30, seed: 6.2 }
   ];
 
+  // Pre-generate 35 realistic spongy micro-pores per rosogolla
   const pores = sweets.map((s, idx) => {
     const list = [];
-    for (let p = 0; p < 7; p++) {
-      const theta = (p * 1.3) + idx;
-      const dist = (0.2 + (p % 4) * 0.18) * s.r;
+    for (let p = 0; p < 32; p++) {
+      const u = (p * 1.618) % 1;
+      const v = p / 32;
+      const theta = u * Math.PI * 2;
+      const phi = Math.acos(2 * v - 1) - Math.PI / 2;
       list.push({
-        dx: Math.cos(theta) * dist,
-        dy: Math.sin(theta) * dist * 0.7,
-        size: 0.9 + (p % 3) * 0.5
+        x: Math.cos(phi) * Math.cos(theta),
+        y: Math.sin(phi),
+        z: Math.cos(phi) * Math.sin(theta),
+        size: 0.8 + (p % 4) * 0.4
       });
     }
     return list;
   });
+
+  // Green ambient sparkles in #00ff00 orbiting the bowl
+  const sparkles = [];
+  for (let s = 0; s < 12; s++) {
+    sparkles.push({
+      dist: 125 + (s * 9) % 35,
+      angle: (s * Math.PI * 2) / 12,
+      speed: 0.008 + (s % 3) * 0.004,
+      y: (s % 5) * 8 - 15,
+      size: 1.2 + (s % 3) * 0.8
+    });
+  }
 
   const stage = canvas.parentElement;
   if (stage) {
@@ -469,95 +534,99 @@ function setupRosogollaBowl() {
       const rect = canvas.getBoundingClientRect();
       const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       const ny = ((e.clientY - rect.top) / rect.height) * 2 - 1;
-      mouseTiltX = nx * 10;
-      mouseTiltY = ny * 6;
-      targetSpeed = 0.024;
+      mouseTiltX = nx * 14;
+      mouseTiltY = ny * 8;
+      targetSpeed = 0.026;
     });
     stage.addEventListener('pointerleave', () => {
       mouseTiltX = 0;
       mouseTiltY = 0;
-      targetSpeed = 0.014;
+      targetSpeed = 0.013;
     });
   }
 
   function draw() {
     ctx.clearRect(0, 0, size, size);
 
-    speed += (targetSpeed - speed) * 0.05;
+    speed += (targetSpeed - speed) * 0.06;
     currentTiltX += (mouseTiltX - currentTiltX) * 0.08;
     currentTiltY += (mouseTiltY - currentTiltY) * 0.08;
     angle = (angle + speed) % (Math.PI * 2);
 
     const cx = 200 + currentTiltX;
     const cy = 205 + currentTiltY;
-    const pitch = 0.44;
+    const pitch = 0.42;
 
     // 1. Table Ambient Glow & Cast Shadow beneath the bowl
     ctx.save();
-    const glowGrad = ctx.createRadialGradient(cx, cy + 95, 20, cx, cy + 95, 140);
-    glowGrad.addColorStop(0, 'rgba(208, 243, 68, 0.16)');
-    glowGrad.addColorStop(0.5, 'rgba(150, 200, 30, 0.06)');
+    // Glowing #00ff00 lime halo
+    const glowGrad = ctx.createRadialGradient(cx, cy + 96, 25, cx, cy + 96, 150);
+    glowGrad.addColorStop(0, 'rgba(0, 255, 0, 0.18)');
+    glowGrad.addColorStop(0.45, 'rgba(0, 255, 0, 0.07)');
     glowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = glowGrad;
     ctx.beginPath();
-    ctx.ellipse(cx, cy + 95, 140, 48, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + 96, 150, 50, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    const shadowGrad = ctx.createRadialGradient(cx, cy + 92, 10, cx, cy + 92, 110);
-    shadowGrad.addColorStop(0, 'rgba(0, 0, 0, 0.75)');
-    shadowGrad.addColorStop(0.6, 'rgba(12, 16, 8, 0.4)');
+    // Deep contact shadow
+    const shadowGrad = ctx.createRadialGradient(cx, cy + 94, 15, cx, cy + 94, 115);
+    shadowGrad.addColorStop(0, 'rgba(0, 0, 0, 0.82)');
+    shadowGrad.addColorStop(0.55, 'rgba(8, 14, 6, 0.5)');
     shadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = shadowGrad;
     ctx.beginPath();
-    ctx.ellipse(cx, cy + 92, 110, 36, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + 94, 115, 38, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
-    // 2. Outer Ceramic Bowl (Back wall & base)
+    // 2. Ceramic Bowl Base (Foot ring)
     ctx.save();
-    ctx.fillStyle = '#0f120c';
-    ctx.strokeStyle = '#2b341c';
-    ctx.lineWidth = 1.5;
+    ctx.fillStyle = '#0a0d08';
+    ctx.strokeStyle = '#1e2814';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.ellipse(cx, cy + 88, 55, 16, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + 90, 56, 17, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    const bowlBodyGrad = ctx.createLinearGradient(cx - 145, cy, cx + 145, cy + 90);
-    bowlBodyGrad.addColorStop(0, '#1c2215');
-    bowlBodyGrad.addColorStop(0.35, '#28331a');
-    bowlBodyGrad.addColorStop(0.7, '#151a10');
-    bowlBodyGrad.addColorStop(1, '#0e110a');
+    // Outer Ceramic Bowl Wall
+    const bowlGrad = ctx.createLinearGradient(cx - 146, cy - 20, cx + 146, cy + 90);
+    bowlGrad.addColorStop(0, '#151b11');
+    bowlGrad.addColorStop(0.35, '#222c18');
+    bowlGrad.addColorStop(0.7, '#13180f');
+    bowlGrad.addColorStop(1, '#090c07');
 
-    ctx.fillStyle = bowlBodyGrad;
-    ctx.strokeStyle = '#384622';
+    ctx.fillStyle = bowlGrad;
+    ctx.strokeStyle = '#32401f';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(cx - 142, cy - 14);
-    ctx.bezierCurveTo(cx - 140, cy + 50, cx - 85, cy + 86, cx - 52, cy + 86);
-    ctx.ellipse(cx, cy + 86, 52, 15, 0, Math.PI, 0, true);
-    ctx.bezierCurveTo(cx + 85, cy + 86, cx + 140, cy + 50, cx + 142, cy - 14);
-    ctx.ellipse(cx, cy - 14, 142, 54, 0, 0, Math.PI, true);
+    ctx.moveTo(cx - 144, cy - 14);
+    ctx.bezierCurveTo(cx - 142, cy + 52, cx - 88, cy + 88, cx - 54, cy + 88);
+    ctx.ellipse(cx, cy + 88, 54, 16, 0, Math.PI, 0, true);
+    ctx.bezierCurveTo(cx + 88, cy + 88, cx + 142, cy + 52, cx + 144, cy - 14);
+    ctx.ellipse(cx, cy - 14, 144, 55, 0, 0, Math.PI, true);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    const innerCavityGrad = ctx.createRadialGradient(cx, cy - 14, 30, cx, cy - 14, 138);
-    innerCavityGrad.addColorStop(0, '#3d4e22');
-    innerCavityGrad.addColorStop(0.5, '#222c15');
-    innerCavityGrad.addColorStop(1, '#11150c');
+    // Inner bowl rear wall
+    const innerCavityGrad = ctx.createRadialGradient(cx, cy - 14, 30, cx, cy - 14, 140);
+    innerCavityGrad.addColorStop(0, '#313f1d');
+    innerCavityGrad.addColorStop(0.55, '#1e2612');
+    innerCavityGrad.addColorStop(1, '#0c1008');
     ctx.fillStyle = innerCavityGrad;
     ctx.beginPath();
-    ctx.ellipse(cx, cy - 14, 138, 51, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy - 14, 140, 52, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
-    // 3. Sweet Golden Syrup (Chashni) pool
+    // 3. Golden Sweet Syrup (Chashni) Pool
     ctx.save();
     const syrupY = cy - 6;
-    const syrupRx = 126;
-    const syrupRy = 45;
-    const syrupGrad = ctx.createRadialGradient(cx - 20, syrupY - 8, 15, cx, syrupY, syrupRx);
+    const syrupRx = 128;
+    const syrupRy = 46;
+    const syrupGrad = ctx.createRadialGradient(cx - 25, syrupY - 10, 15, cx, syrupY, syrupRx);
     syrupGrad.addColorStop(0, '#fae6a6');
     syrupGrad.addColorStop(0.35, '#e0a133');
     syrupGrad.addColorStop(0.7, '#b36f16');
@@ -567,147 +636,187 @@ function setupRosogollaBowl() {
     ctx.ellipse(cx, syrupY, syrupRx, syrupRy, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = 'rgba(255, 245, 200, 0.45)';
-    ctx.lineWidth = 1.6;
+    // Specular liquid reflection ripples
+    ctx.strokeStyle = 'rgba(255, 248, 210, 0.5)';
+    ctx.lineWidth = 1.8;
     ctx.beginPath();
-    ctx.ellipse(cx - 6, syrupY - 4, syrupRx * 0.85, syrupRy * 0.82, -0.05, Math.PI * 0.75, Math.PI * 1.85);
+    ctx.ellipse(cx - 8, syrupY - 4, syrupRx * 0.86, syrupRy * 0.83, -0.04, Math.PI * 0.72, Math.PI * 1.86);
     ctx.stroke();
     ctx.restore();
 
-    // 4. Project and sort the 7 Rosogollas (rotating on axis)
+    // 4. Project and depth-sort the 7 Rosogollas
     const projectedSweets = sweets.map((s, idx) => {
+      // 3D Rotation on vertical Y-axis
       const rx = s.x * Math.cos(angle) - s.z * Math.sin(angle);
       const rz = s.x * Math.sin(angle) + s.z * Math.cos(angle);
-      const ry = s.y + Math.sin(angle * 2.2 + idx) * 2.4;
+      // Gentle floating bob in sweet syrup
+      const ry = s.y + Math.sin(angle * 2.2 + idx) * 2.5;
 
       const sx = cx + rx;
       const sy = (cy - 14) + ry * Math.cos(pitch) + rz * Math.sin(pitch);
       const rad = s.r * (1 + rz * 0.0015);
-      return { idx, sx, sy, rad, rz };
+      return { idx, sx, sy, rad, rx, ry, rz, s };
     }).sort((a, b) => a.rz - b.rz);
 
-    // 5. Render each Rosogolla
-    projectedSweets.forEach(({ idx, sx, sy, rad }) => {
+    // 5. Draw each Hyper-Realistic Rosogolla
+    projectedSweets.forEach(({ idx, sx, sy, rad, rz, s }) => {
       ctx.save();
 
-      // Contact shadow in syrup
-      ctx.fillStyle = 'rgba(85, 42, 6, 0.42)';
+      // Contact shadow in sweet syrup
+      ctx.fillStyle = 'rgba(80, 38, 5, 0.44)';
       ctx.beginPath();
-      ctx.ellipse(sx, sy + rad * 0.52, rad * 0.88, rad * 0.42, 0, 0, Math.PI * 2);
+      ctx.ellipse(sx, sy + rad * 0.54, rad * 0.9, rad * 0.44, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Spongy Spherical Body
-      const lightX = sx - rad * 0.36;
+      // Organic Soft Chhena Contour (subtle irregular curd lumps)
+      ctx.beginPath();
+      const numPts = 32;
+      for (let pt = 0; pt <= numPts; pt++) {
+        const phi = (pt / numPts) * Math.PI * 2;
+        // Natural hand-rolled chhena shape variation
+        const deform = 1 + 0.032 * Math.sin(phi * 3 + s.seed) + 0.018 * Math.cos(phi * 5 + s.seed * 2);
+        const px = sx + Math.cos(phi) * rad * deform;
+        const py = sy + Math.sin(phi) * rad * deform;
+        if (pt === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+
+      // 3D Multi-Stage Spherical Radial Lighting
+      const lightX = sx - rad * 0.35;
       const lightY = sy - rad * 0.38;
-      const sweetGrad = ctx.createRadialGradient(lightX, lightY, rad * 0.06, sx, sy, rad);
-      sweetGrad.addColorStop(0, '#ffffff');
-      sweetGrad.addColorStop(0.16, '#fffef8');
-      sweetGrad.addColorStop(0.52, '#fcf5e5');
-      sweetGrad.addColorStop(0.82, '#eedbc2');
-      sweetGrad.addColorStop(1, '#d8bc92');
+      const sweetGrad = ctx.createRadialGradient(lightX, lightY, rad * 0.05, sx, sy, rad);
+      sweetGrad.addColorStop(0, '#ffffff');       // Glossy specular highlight
+      sweetGrad.addColorStop(0.14, '#fffef8');    // Fresh pure white milk chhena
+      sweetGrad.addColorStop(0.48, '#fcf5e6');    // Creamy ivory curd body
+      sweetGrad.addColorStop(0.74, '#f1dec2');    // Sweet syrup infusion
+      sweetGrad.addColorStop(0.92, '#e2caa2');    // Ambient warm shadow
+      sweetGrad.addColorStop(1, '#cca774');       // Warm golden rim shadow
 
       ctx.fillStyle = sweetGrad;
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.28)';
-      ctx.shadowBlur = 8;
-      ctx.shadowOffsetY = 4;
-      ctx.beginPath();
-      ctx.arc(sx, sy, rad, 0, Math.PI * 2);
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetY = 5;
       ctx.fill();
       ctx.shadowColor = 'transparent';
 
-      // Texture pores
-      ctx.fillStyle = 'rgba(185, 150, 110, 0.38)';
+      // Realistic Spongy Texture Micro-Pores (rotating with 3D sphere)
       pores[idx].forEach(p => {
-        const px = sx + p.dx * Math.cos(angle) - p.dy * Math.sin(angle) * 0.3;
-        const py = sy + p.dx * Math.sin(angle) * 0.3 + p.dy;
-        ctx.beginPath();
-        ctx.arc(px, py, p.size, 0, Math.PI * 2);
-        ctx.fill();
+        // Rotate 3D pore coordinates with ball rotation
+        const px = p.x * Math.cos(angle) - p.z * Math.sin(angle);
+        const pz = p.x * Math.sin(angle) + p.z * Math.cos(angle);
+        const py = p.y;
+
+        // Only draw visible pores facing forward
+        if (pz > -0.15) {
+          const poreScreenX = sx + px * rad * 0.88;
+          const poreScreenY = sy + py * rad * 0.88;
+
+          // Shadow depth of pore
+          ctx.fillStyle = 'rgba(170, 135, 95, 0.42)';
+          ctx.beginPath();
+          ctx.arc(poreScreenX, poreScreenY, p.size, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Pore rim light highlight
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.48)';
+          ctx.beginPath();
+          ctx.arc(poreScreenX - 0.4, poreScreenY - 0.4, p.size * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
       });
 
-      // Saffron garnish (kesar)
-      const garnishAngle = angle + idx * 0.9;
-      const gx = sx + Math.cos(garnishAngle) * (rad * 0.2);
-      const gy = sy - rad * 0.25 + Math.sin(garnishAngle) * (rad * 0.15);
-
-      ctx.strokeStyle = '#d63b00';
-      ctx.lineWidth = 1.5;
+      // Liquid Syrup Glaze Curved Sheen Highlight
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+      ctx.lineWidth = 1.6;
       ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(gx - 4, gy - 2);
-      ctx.quadraticCurveTo(gx + 2, gy - 7, gx + 6, gy + 1);
+      ctx.arc(sx, sy, rad * 0.72, -Math.PI * 0.88, -Math.PI * 0.48);
       ctx.stroke();
 
-      ctx.strokeStyle = '#e67300';
-      ctx.lineWidth = 1.1;
+      // Tiny glistening sugar syrup droplet
+      ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.moveTo(gx - 2, gy + 3);
-      ctx.quadraticCurveTo(gx + 3, gy + 7, gx + 8, gy + 4);
-      ctx.stroke();
-
-      // Pistachio specks
-      ctx.fillStyle = '#99cc33';
-      ctx.beginPath();
-      ctx.arc(gx + 2, gy - 3, 1.4, 0, Math.PI * 2);
-      ctx.arc(gx - 5, gy + 4, 1.2, 0, Math.PI * 2);
+      ctx.arc(lightX + 2, lightY + 1, 1.8, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = '#66991a';
-      ctx.beginPath();
-      ctx.arc(gx + 5, gy + 2, 1.3, 0, Math.PI * 2);
-      ctx.arc(gx - 3, gy - 5, 1.0, 0, Math.PI * 2);
-      ctx.fill();
+      // Garnish: Crushed Pistachio Slivers in vibrant #00ff00
+      const garnishAngle = angle + idx * 0.9;
+      const gx = sx + Math.cos(garnishAngle) * (rad * 0.18);
+      const gy = sy - rad * 0.28 + Math.sin(garnishAngle) * (rad * 0.14);
 
-      // Liquid specular drop
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      // Electric #00ff00 pistachio flakes
+      ctx.fillStyle = '#00ff00';
+      ctx.shadowColor = 'rgba(0, 255, 0, 0.5)';
+      ctx.shadowBlur = 4;
       ctx.beginPath();
-      ctx.ellipse(lightX, lightY, rad * 0.16, rad * 0.1, -0.3, 0, Math.PI * 2);
+      ctx.ellipse(gx + 3, gy - 2, 2.5, 1.4, 0.4, 0, Math.PI * 2);
+      ctx.ellipse(gx - 4, gy + 3, 2.2, 1.2, -0.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
+
+      // Deep green pistachio accent
+      ctx.fillStyle = '#3b7a14';
+      ctx.beginPath();
+      ctx.ellipse(gx + 5, gy + 4, 1.8, 1.0, 0.2, 0, Math.PI * 2);
+      ctx.ellipse(gx - 3, gy - 4, 1.6, 0.9, -0.3, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.restore();
     });
 
-    // 6. Front Lip of the Ceramic Bowl
+    // 6. Front Lip of Ceramic Bowl (overlapping front rosogollas for 3D realism)
     ctx.save();
-    const frontRimGrad = ctx.createLinearGradient(cx - 142, cy - 14, cx + 142, cy + 30);
-    frontRimGrad.addColorStop(0, '#1f2617');
+    const frontRimGrad = ctx.createLinearGradient(cx - 144, cy - 14, cx + 144, cy + 32);
+    frontRimGrad.addColorStop(0, '#1c2215');
     frontRimGrad.addColorStop(0.4, '#2d381c');
-    frontRimGrad.addColorStop(0.7, '#1f2617');
-    frontRimGrad.addColorStop(1, '#11150c');
+    frontRimGrad.addColorStop(0.7, '#1c2215');
+    frontRimGrad.addColorStop(1, '#0f130a');
 
     ctx.fillStyle = frontRimGrad;
-    ctx.strokeStyle = '#3e4d25';
+    ctx.strokeStyle = '#3a4a22';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(cx - 142, cy - 14);
-    ctx.ellipse(cx, cy - 14, 142, 54, 0, Math.PI, 0, true);
-    ctx.bezierCurveTo(cx + 130, cy + 18, cx + 60, cy + 42, cx, cy + 44);
-    ctx.bezierCurveTo(cx - 60, cy + 42, cx - 130, cy + 18, cx - 142, cy - 14);
+    ctx.moveTo(cx - 144, cy - 14);
+    ctx.ellipse(cx, cy - 14, 144, 55, 0, Math.PI, 0, true);
+    ctx.bezierCurveTo(cx + 132, cy + 20, cx + 62, cy + 45, cx, cy + 47);
+    ctx.bezierCurveTo(cx - 62, cy + 45, cx - 132, cy + 20, cx - 144, cy - 14);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // Top rim lime specular highlight
-    ctx.strokeStyle = 'rgba(208, 243, 68, 0.65)';
-    ctx.lineWidth = 2;
+    // Top Rim Glowing #00ff00 Specular Highlight
+    ctx.strokeStyle = '#00ff00';
+    ctx.lineWidth = 2.2;
+    ctx.shadowColor = '#00ff00';
+    ctx.shadowBlur = 8;
     ctx.beginPath();
-    ctx.ellipse(cx, cy - 14, 140, 52, 0, Math.PI * 0.08, Math.PI * 0.92, false);
+    ctx.ellipse(cx, cy - 14, 142, 53, 0, Math.PI * 0.08, Math.PI * 0.92, false);
     ctx.stroke();
+    ctx.shadowColor = 'transparent';
 
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
-    ctx.lineWidth = 1;
+    // 7. Rotating Axis Orbit Marker in #00ff00
+    ctx.setLineDash([5, 7]);
+    ctx.strokeStyle = 'rgba(0, 255, 0, 0.42)';
+    ctx.lineWidth = 1.4;
     ctx.beginPath();
-    ctx.ellipse(cx, cy - 12, 137, 50, 0, Math.PI * 0.12, Math.PI * 0.88, false);
-    ctx.stroke();
-
-    // 7. Rotating Axis Marker
-    ctx.setLineDash([4, 6]);
-    ctx.strokeStyle = 'rgba(208, 243, 68, 0.28)';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + 96, 75, 24, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + 98, 76, 24, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
+
+    // 8. Floating #00ff00 Ambient Sparkles
+    sparkles.forEach((sp, i) => {
+      sp.angle = (sp.angle + sp.speed) % (Math.PI * 2);
+      const spX = cx + Math.cos(sp.angle) * sp.dist;
+      const spY = cy + Math.sin(sp.angle) * (sp.dist * 0.36) + sp.y;
+      ctx.fillStyle = '#00ff00';
+      ctx.shadowColor = '#00ff00';
+      ctx.shadowBlur = 6;
+      ctx.beginPath();
+      ctx.arc(spX, spY, sp.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowColor = 'transparent';
+    });
 
     ctx.restore();
 
@@ -716,304 +825,7 @@ function setupRosogollaBowl() {
 
   requestAnimationFrame(draw);
 }
-function transcriptFor(chat) {
-  return ['# '+chat.title,'',...chat.messages.flatMap(message=>[
-    '## '+(message.role==='user'?'You':'Rosogolla')+(message.voice?' · Live voice':''),'',message.text,
-    ...(message.names?.length?['','Attachments: '+message.names.join(', ')]:[]),
-    ...(message.usage?['','Tokens: '+number(message.usage.totalTokenCount)]:[]),''
-  ]),'Total tokens: '+number(usageFor(chat).total)].join('\n');
-}
-$('share').onclick=async()=>{
-  const chat=getChat();
-  if(!chat)return;
-  try {
-    if(navigator.share)await navigator.share({title:chat.title,text:transcriptFor(chat)});
-    else {await navigator.clipboard.writeText(transcriptFor(chat));toast('Transcript copied for sharing.');}
-  } catch(error) {if(error.name!=='AbortError')toast('Sharing is unavailable. You can export the transcript instead.');}
-};
-$('export').onclick=()=>{
-  const chat=getChat();if(!chat)return;
-  const url=URL.createObjectURL(new Blob([transcriptFor(chat)],{type:'text/markdown;charset=utf-8'}));
-  const link=node('a');link.href=url;link.download='rosogolla-'+(chat.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'transcript').slice(0,48)+'.md';
-  link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-};
-document.querySelectorAll('[data-prompt]').forEach(button=>button.onclick=()=>{$('prompt').value=button.dataset.prompt;$('prompt').focus();});
-$('suggest-file').onclick=$('attach').onclick=()=>$('files').click();
-function renderAttachments() {
-  $('attachments').replaceChildren(...files.map((file,index)=>{
-    const chip=node('span','','chip');
-    const remove=action('×',()=>{files.splice(index,1);renderAttachments();});
-    remove.setAttribute('aria-label','Remove '+file.name);
-    chip.append(icon('file'),file.name,remove);
-    return chip;
-  }));
-}
-$('files').onchange=async()=>{
-  const selection=[...$('files').files];
-  $('files').value='';
-  const destination=files;
-  readingFiles=true;$('send').disabled=true;
-  try {
-    for (const file of selection) {
-      if(destination.length>=4||destination.reduce((sum,item)=>sum+item.size,0)+file.size>5*1024*1024){toast('Attach up to four files, totaling 5 MB.');break;}
-      const extension=file.name.toLowerCase().split('.').pop();
-      const type={pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',txt:'text/plain',md:'text/plain',csv:'text/plain',json:'text/plain'}[extension];
-      if(!type){toast('Choose a PDF, image, or plain-text document.');continue;}
-      if(type==='text/plain'&&file.size>1500000){toast('Text documents can be up to 1.5 MB.');continue;}
-      const data=type==='text/plain'?await file.text():await new Promise((resolve,reject)=>{
-        const reader=new FileReader();reader.onerror=reject;reader.onload=()=>resolve(reader.result.split(',')[1]);reader.readAsDataURL(file);
-      });
-      if(data) destination.push({name:file.name,mime:type,data,size:file.size});
-      else toast('The attachment is empty.');
-    }
-  } catch {toast('The attachment could not be read.');}
-  finally{readingFiles=false;$('send').disabled=pending;renderAttachments();}
-};
-async function sendChat(chat) {
-  if(pending)return;
-  if(!config.hasServerKey && !clientKey){settings();return;}
-  pending=true;chat.pending=true;delete chat.failed;render(current===chat.id);
-  try {
-    let contextSize=0;
-    const messages=[];
-    for (const message of chat.messages.slice(-100).reverse()) {
-      const item={role:message.role,text:message.text,files:fileCache.get(message.id)};
-      const size=JSON.stringify(item).length;
-      if(contextSize+size>11000000)break;
-      contextSize+=size;
-      messages.unshift(item);
-    }
-    while(messages[0]?.role==='model')messages.shift();
-    let result;
-    if (config.isStatic || (!config.hasServerKey && clientKey)) {
-      result = await callOpenRouterDirect(messages, config.model, clientKey);
-    } else {
-      result = await api('chat',{messages});
-    }
-    chat.messages.push({role:'model',text:result.reply,usage:result.usage});
-    temperature=result.temperature;
-    projectBlocked=false;
-  } catch(error) {
-    chat.failed={message:error.message,code:error.code};
-    if(error.code==='OPENROUTER_CREDITS_EXHAUSTED'||error.code==='OPENROUTER_AUTH_ERROR')projectBlocked=true;
-  }
-  finally {
-    pending=false;delete chat.pending;save();render(current===chat.id);
-  }
-}
-$('composer').onsubmit=event=>{
-  event.preventDefault();
-  if(pending||readingFiles)return;
-  const text=$('prompt').value.trim()||(files.length?'Please help me understand the attached material.':'');
-  if(!text)return;
-  if(!config.hasServerKey && !clientKey){settings();return;}
-  const chat=getChat()||createChat(text);
-  if(chat.failed) {
-    toast('Retry the previous message or start a new chat.');
-    return;
-  }
-  const id=crypto.randomUUID();
-  if(files.length)fileCache.set(id,files);
-  chat.messages.push({id,role:'user',text,names:files.map(file=>file.name)});
-  files=[];$('prompt').value='';save();sendChat(chat);
-};
-$('prompt').onkeydown=event=>{
-  if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();$('composer').requestSubmit();}
-};
-function highlight() {
-  const query=$('findbar').hidden?'':$('find-input').value.trim();
-  const marks=[];
-  if(query){
-    const escaped=query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    const regex = new RegExp(escaped,'gi');
-    const walker=document.createTreeWalker($('messages'),NodeFilter.SHOW_TEXT);
-    const candidates=[];
-    while(walker.nextNode())if(walker.currentNode.parentElement.closest('.message-body'))candidates.push(walker.currentNode);
-    for(const text of candidates){
-      const hits=[...text.data.matchAll(regex)];
-      if(!hits.length)continue;
-      const fragment=document.createDocumentFragment();
-      let offset=0;
-      for (const hit of hits) {
-        const mark=node('mark',hit[0]);
-        fragment.append(text.data.slice(offset,hit.index),mark);
-        offset=hit.index+hit[0].length;
-        marks.push(mark);
-      }
-      fragment.append(text.data.slice(offset));text.replaceWith(fragment);
-    }
-  }
-  if(marks.length)match=(match+marks.length)%marks.length;
-  marks[match]?.classList.add('active');
-  $('find-count').textContent=marks.length?`${match+1} of ${marks.length}`:query?'0 matches':'';
-  $('prev').disabled=$('next').disabled=!marks.length;
-}
-function openFind() {
-  if(!getChat())return;
-  $('findbar').hidden=false;renderMessages(getChat());$('find-input').focus();
-}
-function findMove(direction) {
-  const marks=[...$('messages').querySelectorAll('mark')];
-  if(!marks.length)return;
-  marks[match]?.classList.remove('active');
-  match=(match+direction+marks.length)%marks.length;
-  marks[match].classList.add('active');
-  marks[match].scrollIntoView({block:'center'});
-  $('find-count').textContent=`${match+1} of ${marks.length}`;
-}
-$('find').onclick=openFind;
-$('find-input').oninput=()=>{match=0;renderMessages(getChat());$('messages').querySelector('mark.active')?.scrollIntoView({block:'center'});};
-$('find-input').onkeydown=event=>{if(event.key==='Enter')findMove(event.shiftKey?-1:1);};
-$('next').onclick=()=>findMove(1);
-$('prev').onclick=()=>findMove(-1);
-$('close-find').onclick=()=>{$('findbar').hidden=true;$('find-input').value='';renderMessages(getChat());$('find').focus();};
-$('search').onclick=()=>{
-  const input=node('input');input.type='search';input.placeholder='Search titles and messages';input.setAttribute('aria-label','Search titles and messages');
-  const results=node('div');
-  const update=()=>{
-    const query=input.value.trim().toLowerCase();
-    const matches=chats.filter(chat=>chat.title.toLowerCase().includes(query)||chat.messages.some(message=>message.text.toLowerCase().includes(query)));
-    results.replaceChildren(...matches.map(chat=>action(chat.title,()=>{
-      choose(chat.id);$('modal').close();
-      if(query){$('find-input').value=input.value.trim();openFind();$('messages').querySelector('mark.active')?.scrollIntoView({block:'center'});}
-    },'result')));
-    if(!matches.length)results.append(node('p','No matching conversations.','dialog-copy'));
-  };
-  input.oninput=update;update();openDialog('Search chats',input,results);input.focus();
-};
-document.addEventListener('keydown',event=>{
-  if($('modal').open)return;
-  if(event.altKey&&event.key.toLowerCase()==='n'){event.preventDefault();newChat();}
-  if((event.metaKey||event.ctrlKey)&&event.key==='f'&&getChat()){event.preventDefault();openFind();}
-  if(event.key==='Escape')closeSidebar();
-});
-$('dictate').onclick=()=>{
-  if(recording){recording.stop();return;}
-  const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!Recognition){toast('Dictation needs browser speech recognition. Live voice also accepts speech directly.');return;}
-  const speech=new Recognition();
-  speech.lang=navigator.language;speech.interimResults=false;speech.continuous=true;
-  speech.onstart=()=>{recording=speech;$('dictate').setAttribute('aria-pressed','true');toast('Listening. Say “send message” to send.');};
-  speech.onend=()=>{recording=null;$('dictate').setAttribute('aria-pressed','false');};
-  speech.onerror=event=>toast('Dictation: '+event.error.replaceAll('-',' ')+'.');
-  speech.onresult=event=>{
-    for(let index=event.resultIndex;index<event.results.length;index++){
-      const text=event.results[index][0].transcript.trim();
-      const command=text.match(/^(.*?)\s*\bsend message[.!?]?$/i);
-      if(command){
-        if(command[1])$('prompt').value+=($('prompt').value?' ':'')+command[1];
-        speech.stop();$('composer').requestSubmit();break;
-      }
-      $('prompt').value+=($('prompt').value?' ':'')+text;
-    }
-  };
-  try{speech.start();}catch{toast('Dictation could not start.');}
-};
-function switchProfile(next) {
-  if(pending){toast('Wait for the current response before switching accounts.');return;}
-  profile=next;
-  sessionStorage.setItem('usion.profile',JSON.stringify(next));
-  chats=restoreChats(profile?.id);
-  fileCache.clear();
-  newChat();
-  $('modal').close();
-}
-let googleScript;
-$('account').onclick=async()=>{
-  if(profile){
-    openDialog('Your account',node('p',profile.email||profile.name,'dialog-copy'),action('Sign out',()=>{window.google?.accounts.id.disableAutoSelect();switchProfile(null);},'dialog-action'));
-    return;
-  }
-  if(!config.googleClientId){
-    openDialog('Sign in with Google',node('p','This installation needs a Google OAuth Web client ID in GOOGLE_CLIENT_ID. See the project setup guide.','dialog-copy'));
-    return;
-  }
-  const container=node('div');
-  const status=node('p','Chat history is kept in this browser for each account.','dialog-copy');
-  openDialog('Sign in with Google',status,container);
-  try{
-    if(!window.google?.accounts?.id){
-      googleScript??=new Promise((resolve,reject)=>{
-        const script=node('script');script.src='https://accounts.google.com/gsi/client';script.async=true;
-        script.onload=resolve;script.onerror=()=>{script.remove();googleScript=null;reject();};
-        document.head.append(script);
-      });
-      await googleScript;
-    }
-    google.accounts.id.initialize({client_id:config.googleClientId,callback:async({credential})=>{
-      try{switchProfile(await api('google',{credential}));}catch(error){status.textContent=error.message;}
-    }});
-    google.accounts.id.renderButton(container,{theme:'filled_black',size:'large',text:'signin_with'});
-  }catch{status.textContent='Google sign-in could not load.';}
-};
-function showLive() {
-  if(activeLive)return;
-  const stage=node('div','','voice-stage');
-  const orbit=node('div','','orbit');
-  orbit.setAttribute('aria-hidden','true');
-  const orb=node('div','','orb');
-  orbit.append(orb);
-  const status=node('p','Speak with Rosogolla in real time.','dialog-copy voice-status');
-  status.setAttribute('role','status');
-  const caption=node('p','','voice-caption');
-  caption.hidden=true;
-  const start=action('Start conversation',()=>{
-    if(!config.hasServerKey){settings();return;}
-    if(pending){toast('Wait for the current response before starting live voice.');return;}
-    recording?.stop();
-    status.textContent='Connecting and requesting microphone access…';
-    stage.dataset.state='connecting';
-    caption.hidden=false;
-    start.replaceWith(action('End session',()=>$('modal').close(),'dialog-action'));
-    connectLive(stage,orb,status,caption);
-  },'dialog-action');
-  stage.append(orbit,status,caption,start);
-  openDialog('Live with Rosogolla',stage);
-  $('modal').dataset.view='voice';
-}
-$('hero-live').onclick=$('live').onclick=showLive;
-function connectLive(stage,orb,status,caption) {
-  let chat=getChat();
-  const control=startLive({
-    authorize:()=>api('live'),
-    onStatus:(text,connected)=>{
-      status.textContent=text;
-      stage.dataset.state=connected?'listening':'ended';
-    },
-    onActivity:(state,level)=>{
-      stage.dataset.state=state;
-      orb.style.setProperty('--level',String(level));
-    },
-    onCaption:(text)=>{caption.textContent=text;caption.scrollTop=caption.scrollHeight;},
-    onTurn:({input,output,usage})=>{
-      if(!input&&!output&&!usage)return;
-      chat??=createChat('Live voice');
-      if(input)chat.messages.push({role:'user',text:input,voice:true});
-      if(output||usage)chat.messages.push({role:'model',text:output||'',usage,voice:true});
-      save();render(current===chat.id);
-    },
-    onEnd:()=>{if(activeLive===control)activeLive=null;}
-  });
-  activeLive=control;
-}
-fetch('./api/config').then(response => {
-  if (!response.ok) throw new Error('Static host');
-  return response.json();
-}).then(data => {
-  config = data;
-  if (!config.hasServerKey && clientKey) config.hasServerKey = true;
-  render();
-}).catch(() => {
-  config = {
-    model: load('usion.openrouter_model', 'openrouter/free'),
-    liveModel: '',
-    hasServerKey: !!clientKey,
-    googleClientId: '',
-    liveVoiceEnabled: false,
-    isStatic: true
-  };
-  render();
-});
-render();
+
+setupBackgroundVoice();
 setupIntroOverlay();
 setupRosogollaBowl();

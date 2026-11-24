@@ -1,4 +1,4 @@
-const types = {html:'text/html; charset=utf-8',css:'text/css; charset=utf-8',js:'text/javascript; charset=utf-8',svg:'image/svg+xml',webp:'image/webp',mp4:'video/mp4'};
+const types = {html:'text/html; charset=utf-8',css:'text/css; charset=utf-8',js:'text/javascript; charset=utf-8',svg:'image/svg+xml',webp:'image/webp',mp4:'video/mp4',mp3:'audio/mpeg'};
 function serveAsset(request) {
   const name = fileMap[new URL(request.url).pathname];
   if (!name || !Object.hasOwn(sources,name)) return new Response('Not found',{status:404});
@@ -7,7 +7,7 @@ function serveAsset(request) {
   const bytes = Uint8Array.from(atob(sources[name]),char=>char.charCodeAt(0));
   const headers = {'Content-Type':types[extension],'Cache-Control':extension==='html'?'no-cache':'public, max-age=3600','X-Content-Type-Options':'nosniff','Referrer-Policy':'strict-origin-when-cross-origin'};
   let start=0,end=bytes.length-1,status=200;
-  if (extension==='mp4') {
+  if (['mp4','mp3'].includes(extension)) {
     headers['Accept-Ranges']='bytes';
     const range=request.headers.get('range');
     if (range) {

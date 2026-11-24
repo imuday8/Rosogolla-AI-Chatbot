@@ -2,7 +2,7 @@ import {mkdir,readFile,writeFile} from 'node:fs/promises';
 
 const files = {
   '/':'index.html','/index.html':'index.html','/style.css':'style.css',
-  '/app.js':'app.js','/live.js':'live.js','/rosogolla.svg':'rosogolla.svg','/orb.webp':'orb.webp','/intro.mp4':'intro.mp4'
+  '/app.js':'app.js','/live.js':'live.js','/rosogolla.svg':'rosogolla.svg','/orb.webp':'orb.webp','/intro.mp4':'intro.mp4','/voice.mp3':'voice.mp3'
 };
 const sources = Object.fromEntries(await Promise.all([...new Set(Object.values(files))].map(async name=>[
   name,(await readFile(new URL('./public/'+name,import.meta.url))).toString('base64')
