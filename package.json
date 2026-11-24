@@ -1,0 +1,11 @@
+{
+  "name": "usion",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node --env-file-if-exists=.env serve.mjs",
+    "check": "node --check worker.mjs && node --check public/app.js && node --check public/live.js"
+  },
+  "engines": {"node": ">=22"}
+}

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#151510">
+<title>USION — A space for your curiosity</title>
+<meta name="description" content="A Gemini-powered workspace for ideas, documents and live conversations.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script>
+</head>
+<body>
+<div id="shell">
+<aside id="sidebar" aria-label="Workspace navigation">
+  <div class="brand"><span class="brand-icon" data-icon="spark"></span>USION<span class="brand-dot">.</span></div>
+  <button id="new" class="new"><span data-icon="plus"></span> New chat <kbd>⌥ N</kbd></button>
+  <button id="search" class="side-action"><span data-icon="search"></span> Search chats</button>
+  <section class="history"><h2>Chat history</h2><div id="history"></div></section>
+  <div class="sidebar-bottom">
+    <button id="share" class="side-action"><span data-icon="share"></span> Share conversation</button>
+    <button id="export" class="side-action"><span data-icon="download"></span> Export transcript</button>
+    <button id="settings" class="side-action"><span data-icon="settings"></span> Settings</button>
+    <button id="account" class="account"><span class="avatar" data-icon="user"></span><span><strong id="account-name">Guest workspace</strong><small id="account-detail">Sign in with Google</small></span><span data-icon="chevron"></span></button>
+  </div>
+</aside>
+<main>
+<header id="navigation"><div class="workspace"><button id="menu" class="icon-button" aria-controls="sidebar" aria-expanded="false" aria-label="Toggle navigation" data-icon="menu"></button><span id="breadcrumb">Workspace</span></div><div class="header-actions"><button id="usage" class="pill"><span data-icon="activity"></span><span id="token-count">0 tokens</span></button><button id="connect" class="pill connect"><span class="status-dot"></span><span id="connection-label">Connect Gemini</span></button></div></header>
+<div id="scroll" tabindex="0" aria-label="Conversation">
+  <section id="welcome">
+    <div class="hero">
+      <div class="hero-copy"><div class="eyebrow"><span data-icon="spark"></span> YOUR AI WORKSPACE</div>
+        <h1>What's on<br>your <em>mind?</em></h1>
+        <p>Think it through, make something new, or just talk. USION is here for it.</p>
+        <button id="intro" class="intro"><span data-icon="play"></span> Watch intro <span class="duration">0:08</span></button>
+      </div>
+      <div class="hero-art" aria-hidden="true"></div>
+    </div>
+    <div class="suggestions"><div class="section-label">START WITH AN IDEA</div><div class="cards">
+      <button data-prompt="Help me brainstorm a few fresh ideas for "><span class="card-icon" data-icon="bulb"></span><strong>Brainstorm ideas</strong><small>Find a fresh angle</small></button>
+      <button data-prompt="Help me write a polished first draft about "><span class="card-icon" data-icon="pen"></span><strong>Write something</strong><small>From thought to draft</small></button>
+      <button data-prompt="Explain this in plain language with a practical example: "><span class="card-icon" data-icon="book"></span><strong>Learn something</strong><small>Make the complex clear</small></button>
+      <button id="suggest-file"><span class="card-icon" data-icon="file"></span><strong>Explore a document</strong><small>Find what matters in a file</small></button>
+    </div></div>
+  </section>
+  <section id="conversation" hidden><div class="thread-top"><h1 id="thread-title"></h1><button id="find" class="pill" data-icon="search" aria-label="Find in conversation"></button></div><div id="findbar" hidden><input id="find-input" type="search" placeholder="Find words in this chat"><span id="find-count"></span><button id="prev" aria-label="Previous match">↑</button><button id="next" aria-label="Next match">↓</button><button id="close-find" aria-label="Close search">×</button></div><div id="messages"></div></section>
+</div>
+<div class="composer-region"><form id="composer">
+  <div id="attachments"></div>
+  <textarea id="prompt" rows="2" placeholder="Message USION..." aria-label="Message USION"></textarea>
+  <div class="composer-actions"><div><button type="button" id="attach" class="icon-button" data-icon="clip" aria-label="Attach a document" title="Attach a document"></button><button type="button" id="dictate" class="icon-button" data-icon="mic" aria-label="Dictate or say send message" title="Dictate or say “send message”"></button><input id="files" type="file" multiple accept=".pdf,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp" hidden></div><div><button type="button" id="live" class="live"><span data-icon="wave"></span> Live voice</button><button class="send" id="send" data-icon="send" aria-label="Send message" title="Send message"></button></div></div>
+</form><footer>Powered by Gemini <span>·</span> Creative mode <span>·</span> AI can make mistakes.</footer></div>
+</main>
+</div>
+<dialog id="modal" aria-labelledby="modal-title"><div class="modal-top"><h2 id="modal-title"></h2><button id="close-modal" class="icon-button" data-icon="close" aria-label="Close dialog"></button></div><div id="modal-content"></div></dialog>
+<div id="toast" role="status" hidden></div>
+</body></html>
