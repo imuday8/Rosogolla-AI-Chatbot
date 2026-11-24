@@ -1,4 +1,4 @@
-const types = {html:'text/html; charset=utf-8',css:'text/css; charset=utf-8',js:'text/javascript; charset=utf-8',svg:'image/svg+xml',webp:'image/webp',mp4:'video/mp4',mp3:'audio/mpeg'};
+const types = {html:'text/html; charset=utf-8',css:'text/css; charset=utf-8',js:'text/javascript; charset=utf-8',svg:'image/svg+xml',webp:'image/webp',mp4:'video/mp4',mp3:'audio/mpeg',png:'image/png',jpg:'image/jpeg'};
 function serveAsset(request) {
   const name = fileMap[new URL(request.url).pathname];
   if (!name || !Object.hasOwn(sources,name)) return new Response('Not found',{status:404});

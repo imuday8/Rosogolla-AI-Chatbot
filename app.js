@@ -466,6 +466,10 @@ function setupIntroOverlay() {
   let dismissed = false;
   let animId = null;
   const startTime = performance.now();
+  const heroImg = new Image();
+  heroImg.src = "./rosogolla-hero.png";
+  let heroLoaded = false;
+  heroImg.onload = () => { heroLoaded = true; };
   const INTRO_DURATION = 5500; // 5.5 seconds (5-6 seconds duration) // 6.8 seconds total intro
 
   function dismiss() {
@@ -675,104 +679,44 @@ function setupIntroOverlay() {
     // 5. The Grand 3D Kinetic King Rosogolla Sweet
     ctx.save();
     // Ambient drop shadow beneath the sweet
-    const sweetShadow = ctx.createRadialGradient(cx, cy + rad * 0.85, 10, cx, cy + rad * 0.85, rad * 1.4);
-    sweetShadow.addColorStop(0, 'rgba(0, 255, 0, 0.22)');
-    sweetShadow.addColorStop(0.4, 'rgba(0, 0, 0, 0.75)');
+    const sweetShadow = ctx.createRadialGradient(cx, cy + rad * 0.9, 10, cx, cy + rad * 0.9, rad * 1.55);
+    sweetShadow.addColorStop(0, 'rgba(0, 255, 0, 0.32)');
+    sweetShadow.addColorStop(0.4, 'rgba(0, 0, 0, 0.85)');
     sweetShadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = sweetShadow;
     ctx.beginPath();
-    ctx.ellipse(cx, cy + rad * 0.85, rad * 1.25, rad * 0.42, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + rad * 0.9, rad * 1.35, rad * 0.45, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Organic Spongy Chhena Contour
-    ctx.beginPath();
-    const NUM_PTS = 40;
-    const sweetAngle = t * 0.55;
-    for (let pt = 0; pt <= NUM_PTS; pt++) {
-      const phi = (pt / NUM_PTS) * Math.PI * 2;
-      const deform = 1 + 0.026 * Math.sin(phi * 4 + sweetAngle) + 0.018 * Math.cos(phi * 6 - sweetAngle * 1.5);
-      const px = cx + Math.cos(phi) * rad * deform;
-      const py = cy + Math.sin(phi) * rad * deform;
-      if (pt === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-
-    // Multi-Stage Spherical Radial Lighting
-    const lightX = cx - rad * 0.32;
-    const lightY = cy - rad * 0.35;
-    const sweetGrad = ctx.createRadialGradient(lightX, lightY, rad * 0.06, cx, cy, rad * 1.05);
-    sweetGrad.addColorStop(0, '#ffffff');       // Specular bright light
-    sweetGrad.addColorStop(0.12, '#fffef6');    // Pure fresh curd
-    sweetGrad.addColorStop(0.46, '#fcf4e4');    // Creamy Bengali milk body
-    sweetGrad.addColorStop(0.72, '#f3dcba');    // Sugar syrup infusion
-    sweetGrad.addColorStop(0.92, '#dfba86');    // Deep amber syrup edge
-    sweetGrad.addColorStop(1, '#bc9052');       // Ambient warm rim shadow
-
-    ctx.fillStyle = sweetGrad;
-    ctx.shadowColor = 'rgba(0, 255, 0, 0.4)';
-    ctx.shadowBlur = 32;
-    ctx.fill();
-    ctx.shadowColor = 'transparent';
-
-    // 3D Micro-Pores rotating across the sweet
-    pores.forEach(p => {
-      const rotY = sweetAngle * 0.75;
-      const px = p.x * Math.cos(rotY) - p.z * Math.sin(rotY);
-      const pz = p.x * Math.sin(rotY) + p.z * Math.cos(rotY);
-      const py = p.y;
-
-      if (pz > -0.15) {
-        const poreX = cx + px * rad * 0.88;
-        const poreY = cy + py * rad * 0.88;
-
-        ctx.fillStyle = 'rgba(165, 125, 80, 0.38)';
-        ctx.beginPath();
-        ctx.arc(poreX, poreY, p.size, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.beginPath();
-        ctx.arc(poreX - 0.5, poreY - 0.5, p.size * 0.5, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    });
-
-    // Curving Specular Glaze Sheen
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.72)';
-    ctx.lineWidth = 2.4;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.arc(cx, cy, rad * 0.74, -Math.PI * 0.88, -Math.PI * 0.46);
-    ctx.stroke();
-
-    // Glistening sugar syrup crystal droplet
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = '#ffffff';
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.arc(lightX + 2, lightY + 2, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-
-    // Pistachio slivers in vibrant #00ff00 orbiting on the top
-    for (let g = 0; g < 4; g++) {
-      const gAngle = sweetAngle + g * (Math.PI * 0.5);
-      const gx = cx + Math.cos(gAngle) * (rad * 0.28);
-      const gy = cy - rad * 0.22 + Math.sin(gAngle) * (rad * 0.16);
+    if (heroLoaded) {
+      // Draw the hyper-realistic 8K studio photograph of authentic Bengali Rosogolla
+      const drawSize = rad * 2.85;
+      const drawX = cx - drawSize * 0.5;
+      const drawY = cy - drawSize * 0.5;
 
       ctx.save();
-      ctx.translate(gx, gy);
-      ctx.rotate(gAngle * 1.5);
-      ctx.fillStyle = '#00ff00';
+      // Glowing neon lime rim aura
       ctx.shadowColor = '#00ff00';
-      ctx.shadowBlur = 10;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 3.8, 1.6, 0, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.shadowBlur = 28;
+      ctx.drawImage(heroImg, drawX, drawY, drawSize, drawSize);
       ctx.restore();
+    } else {
+      // Fallback while decoding
+      const lightX = cx - rad * 0.32;
+      const lightY = cy - rad * 0.35;
+      const sweetGrad = ctx.createRadialGradient(lightX, lightY, rad * 0.06, cx, cy, rad * 1.05);
+      sweetGrad.addColorStop(0, '#ffffff');
+      sweetGrad.addColorStop(0.12, '#fffef6');
+      sweetGrad.addColorStop(0.46, '#fcf4e4');
+      sweetGrad.addColorStop(0.72, '#f3dcba');
+      sweetGrad.addColorStop(1, '#bc9052');
+      ctx.fillStyle = sweetGrad;
+      ctx.shadowColor = 'rgba(0, 255, 0, 0.4)';
+      ctx.shadowBlur = 32;
+      ctx.beginPath();
+      ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+      ctx.fill();
     }
-
     ctx.restore();
 
     animId = requestAnimationFrame(render);
