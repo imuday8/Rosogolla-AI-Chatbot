@@ -371,15 +371,21 @@ function setupBackgroundVoice() {
   if (!audio) return;
 
   audio.loop = true;
+  audio.volume = 0.85;
   let isPlaying = false;
 
   function playVoice() {
     if (isPlaying) return;
-    audio.play().then(() => {
-      isPlaying = true;
-      if (toggleBtn) toggleBtn.classList.add('voice-pill');
-      if (statusText) statusText.textContent = 'Voice ON';
-    }).catch(() => {});
+    const p = audio.play();
+    if (p && typeof p.then === 'function') {
+      p.then(() => {
+        isPlaying = true;
+        if (toggleBtn) toggleBtn.classList.add('voice-pill');
+        if (statusText) statusText.textContent = 'Voice ON';
+        const introMuteText = $('intro-mute-text');
+        if (introMuteText) introMuteText.textContent = 'Sound ON';
+      }).catch(() => {});
+    }
   }
 
   function pauseVoice() {
@@ -387,25 +393,22 @@ function setupBackgroundVoice() {
     isPlaying = false;
     if (toggleBtn) toggleBtn.classList.remove('voice-pill');
     if (statusText) statusText.textContent = 'Voice OFF';
+    const introMuteText = $('intro-mute-text');
+    if (introMuteText) introMuteText.textContent = 'Muted';
   }
 
-  if (toggleBtn) {
-    toggleBtn.onclick = () => {
-      if (isPlaying) pauseVoice();
-      else playVoice();
-    };
-  }
+  // Automatically attempt unmuted autoplay immediately
+  playVoice();
 
-  // Auto-play voice on any user interaction (clicks, typing, touching)
-  const gestures = ['click', 'keydown', 'touchstart', 'pointerdown'];
+  // Instant fallback on first micro-interaction
+  const gestures = ['pointerdown', 'pointermove', 'click', 'keydown', 'touchstart'];
   function onGesture() {
     playVoice();
-    gestures.forEach(g => document.removeEventListener(g, onGesture));
+    gestures.forEach(g => window.removeEventListener(g, onGesture));
   }
-  gestures.forEach(g => document.addEventListener(g, onGesture, { passive: true }));
+  gestures.forEach(g => window.addEventListener(g, onGesture, { passive: true }));
 
-  // Expose to window for intro overlay to trigger directly
-  window.rosogollaVoice = { play: playVoice, pause: pauseVoice };
+  window.rosogollaVoice = { play: playVoice, pause: pauseVoice, isPlaying: () => isPlaying };
 }
 
 function setupIntroOverlay() {
@@ -438,7 +441,7 @@ function setupIntroOverlay() {
   let dismissed = false;
   let animId = null;
   const startTime = performance.now();
-  const INTRO_DURATION = 6800; // 6.8 seconds total intro
+  const INTRO_DURATION = 5500; // 5.5 seconds (5-6 seconds duration) // 6.8 seconds total intro
 
   function dismiss() {
     if (dismissed) return;
@@ -463,13 +466,16 @@ function setupIntroOverlay() {
     mouseY = (e.clientY / height) * 2 - 1;
   });
 
-  // Sound Controls
-  let isMuted = true;
+  // Sound Controls - Default to ON automatically
+  let isMuted = false;
+  if (muteText) muteText.textContent = 'Sound ON';
+  if (window.rosogollaVoice) window.rosogollaVoice.play();
+
   if (muteBtn) {
     muteBtn.onclick = (e) => {
       e.stopPropagation();
       isMuted = !isMuted;
-      if (muteText) muteText.textContent = isMuted ? 'Sound on' : 'Mute';
+      if (muteText) muteText.textContent = isMuted ? 'Muted' : 'Sound ON';
       if (!isMuted && window.rosogollaVoice) {
         window.rosogollaVoice.play();
       } else if (isMuted && window.rosogollaVoice) {
