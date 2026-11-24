@@ -52,7 +52,7 @@ function restoreChats(id) {
   });
 }
 let chats = restoreChats(profile?.id);
-let current = chats[0]?.id || null;
+let current = null;
 let config = {model:'gemini-3.8-flash',liveModel:'gemini-3.8-live'};
 let projectBlocked = false;
 let temperature = 2;
