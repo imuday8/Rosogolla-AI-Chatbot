@@ -3,7 +3,7 @@ import {startLive} from './live.js?v=2';
 const $ = id => document.getElementById(id);
 const load = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
 const tab = (key, fallback) => { try { return JSON.parse(sessionStorage.getItem(key)) ?? fallback; } catch { return fallback; } };
-let clientKey = load('rosogolla.openrouter_key', load('usion.openrouter_key', ''));
+let clientKey = load('rosogolla.openrouter_key', load('rosogolla.openrouter_key', ''));
 
 async function callOpenRouterDirect(messages, model, key) {
   const openRouterMessages = [];
@@ -65,6 +65,7 @@ async function callOpenRouterDirect(messages, model, key) {
   return { reply, usage, temperature: 1 };
 }
 
+
 const icons = {
   spark:'<path d="M12 2v20M2 12h20M5 5l14 14M5 19 19 5"/>',
   plus:'<path d="M12 5v14M5 12h14"/>', search:'<circle cx="10.8" cy="10.8" r="6.5"/><path d="m16 16 4 4"/>',
@@ -104,9 +105,9 @@ function action(label, handler, className='') {
   button.onclick=handler;
   return button;
 }
-let profile = tab('rosogolla.profile', tab('usion.profile', null));
+let profile = tab('rosogolla.profile',null);
 function restoreChats(id) {
-  return (load('rosogolla.chats.'+(id||'guest'), null) || load('usion.chats.'+(id||'guest'), [])).map(chat=>{
+  return load('rosogolla.chats.'+(id||'guest'),[]).map(chat=>{
     delete chat.pending;
     const last=chat.messages.at(-1);
     if(last?.role==='user'&&!last.voice)chat.failed ||= true;
@@ -364,51 +365,75 @@ $('usage').onclick=()=>{
   total.append(node('span','Total'),node('strong',number(usage.total)+' tokens'));
   openDialog('Token usage',node('p','Token usage for this conversation. Input includes context sent with each request.','dialog-copy'),chart,total);
 };
+
+
 function setupBackgroundVoice() {
   const audio = $('bg-voice');
   const toggleBtn = $('voice-toggle');
   const statusText = $('voice-toggle-text');
+  const introMuteBtn = $('intro-mute');
+  const introMuteText = $('intro-mute-text');
   if (!audio) return;
 
   audio.loop = true;
   audio.volume = 0.85;
-  let isPlaying = false;
+
+  function updateUI() {
+    const isPlaying = !audio.paused;
+    if (toggleBtn) {
+      if (isPlaying) toggleBtn.classList.add('voice-pill');
+      else toggleBtn.classList.remove('voice-pill');
+    }
+    if (statusText) statusText.textContent = isPlaying ? 'Voice ON' : 'Voice OFF';
+    if (introMuteText) introMuteText.textContent = isPlaying ? 'Sound ON' : 'Sound OFF';
+  }
+
+  audio.addEventListener('play', updateUI);
+  audio.addEventListener('pause', updateUI);
+  audio.addEventListener('playing', updateUI);
 
   function playVoice() {
-    if (isPlaying) return;
     const p = audio.play();
     if (p && typeof p.then === 'function') {
-      p.then(() => {
-        isPlaying = true;
-        if (toggleBtn) toggleBtn.classList.add('voice-pill');
-        if (statusText) statusText.textContent = 'Voice ON';
-        const introMuteText = $('intro-mute-text');
-        if (introMuteText) introMuteText.textContent = 'Sound ON';
-      }).catch(() => {});
+      p.then(updateUI).catch(() => {});
     }
   }
 
   function pauseVoice() {
     audio.pause();
-    isPlaying = false;
-    if (toggleBtn) toggleBtn.classList.remove('voice-pill');
-    if (statusText) statusText.textContent = 'Voice OFF';
-    const introMuteText = $('intro-mute-text');
-    if (introMuteText) introMuteText.textContent = 'Muted';
+    updateUI();
   }
 
-  // Automatically attempt unmuted autoplay immediately
+  function toggleVoice() {
+    if (audio.paused) playVoice();
+    else pauseVoice();
+  }
+
+  if (toggleBtn) toggleBtn.onclick = toggleVoice;
+  if (introMuteBtn) {
+    introMuteBtn.onclick = (e) => {
+      e.stopPropagation();
+      toggleVoice();
+    };
+  }
+
+  // Attempt unmuted auto-play immediately on load
   playVoice();
 
-  // Instant fallback on first micro-interaction
-  const gestures = ['pointerdown', 'pointermove', 'click', 'keydown', 'touchstart'];
+  // Instant fallback on first gesture
+  const gestures = ['pointerdown', 'touchstart', 'click', 'keydown'];
   function onGesture() {
-    playVoice();
+    if (audio.paused) playVoice();
     gestures.forEach(g => window.removeEventListener(g, onGesture));
   }
   gestures.forEach(g => window.addEventListener(g, onGesture, { passive: true }));
 
-  window.rosogollaVoice = { play: playVoice, pause: pauseVoice, isPlaying: () => isPlaying };
+  window.rosogollaVoice = {
+    play: playVoice,
+    pause: pauseVoice,
+    toggle: toggleVoice,
+    isPlaying: () => !audio.paused
+  };
 }
 
 function setupIntroOverlay() {
@@ -467,23 +492,7 @@ function setupIntroOverlay() {
     mouseY = (e.clientY / height) * 2 - 1;
   });
 
-  // Sound Controls - Default to ON automatically
-  let isMuted = false;
-  if (muteText) muteText.textContent = 'Sound ON';
   if (window.rosogollaVoice) window.rosogollaVoice.play();
-
-  if (muteBtn) {
-    muteBtn.onclick = (e) => {
-      e.stopPropagation();
-      isMuted = !isMuted;
-      if (muteText) muteText.textContent = isMuted ? 'Muted' : 'Sound ON';
-      if (!isMuted && window.rosogollaVoice) {
-        window.rosogollaVoice.play();
-      } else if (isMuted && window.rosogollaVoice) {
-        window.rosogollaVoice.pause();
-      }
-    };
-  }
 
   if (skipBtn) {
     skipBtn.addEventListener('click', (e) => { e.stopPropagation(); dismiss(); });
@@ -771,6 +780,7 @@ function setupIntroOverlay() {
 
   animId = requestAnimationFrame(render);
 }
+
 
 function setupRosogollaBowl() {
   const canvas = $('rosogolla-bowl');
@@ -1130,6 +1140,314 @@ function setupRosogollaBowl() {
 
   requestAnimationFrame(draw);
 }
+
+
+function transcriptFor(chat) {
+  return ['# '+chat.title,'',...chat.messages.flatMap(message=>[
+    '## '+(message.role==='user'?'You':'Rosogolla')+(message.voice?' · Live voice':''),'',message.text,
+    ...(message.names?.length?['','Attachments: '+message.names.join(', ')]:[]),
+    ...(message.usage?['','Tokens: '+number(message.usage.totalTokenCount)]:[]),''
+  ]),'Total tokens: '+number(usageFor(chat).total)].join('\n');
+}
+$('share').onclick=async()=>{
+  const chat=getChat();
+  if(!chat)return;
+  try {
+    if(navigator.share)await navigator.share({title:chat.title,text:transcriptFor(chat)});
+    else {await navigator.clipboard.writeText(transcriptFor(chat));toast('Transcript copied for sharing.');}
+  } catch(error) {if(error.name!=='AbortError')toast('Sharing is unavailable. You can export the transcript instead.');}
+};
+$('export').onclick=()=>{
+  const chat=getChat();if(!chat)return;
+  const url=URL.createObjectURL(new Blob([transcriptFor(chat)],{type:'text/markdown;charset=utf-8'}));
+  const link=node('a');link.href=url;link.download='rosogolla-'+(chat.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'transcript').slice(0,48)+'.md';
+  link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+document.querySelectorAll('[data-prompt]').forEach(button=>button.onclick=()=>{$('prompt').value=button.dataset.prompt;$('prompt').focus();});
+$('suggest-file').onclick=$('attach').onclick=()=>$('files').click();
+function renderAttachments() {
+  $('attachments').replaceChildren(...files.map((file,index)=>{
+    const chip=node('span','','chip');
+    const remove=action('×',()=>{files.splice(index,1);renderAttachments();});
+    remove.setAttribute('aria-label','Remove '+file.name);
+    chip.append(icon('file'),file.name,remove);
+    return chip;
+  }));
+}
+$('files').onchange=async()=>{
+  const selection=[...$('files').files];
+  $('files').value='';
+  const destination=files;
+  readingFiles=true;$('send').disabled=true;
+  try {
+    for (const file of selection) {
+      if(destination.length>=4||destination.reduce((sum,item)=>sum+item.size,0)+file.size>5*1024*1024){toast('Attach up to four files, totaling 5 MB.');break;}
+      const extension=file.name.toLowerCase().split('.').pop();
+      const type={pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',txt:'text/plain',md:'text/plain',csv:'text/plain',json:'text/plain'}[extension];
+      if(!type){toast('Choose a PDF, image, or plain-text document.');continue;}
+      if(type==='text/plain'&&file.size>1500000){toast('Text documents can be up to 1.5 MB.');continue;}
+      const data=type==='text/plain'?await file.text():await new Promise((resolve,reject)=>{
+        const reader=new FileReader();reader.onerror=reject;reader.onload=()=>resolve(reader.result.split(',')[1]);reader.readAsDataURL(file);
+      });
+      if(data) destination.push({name:file.name,mime:type,data,size:file.size});
+      else toast('The attachment is empty.');
+    }
+  } catch {toast('The attachment could not be read.');}
+  finally{readingFiles=false;$('send').disabled=pending;renderAttachments();}
+};
+async function sendChat(chat) {
+  if(pending)return;
+  if(!config.hasServerKey && !clientKey){settings();return;}
+  pending=true;chat.pending=true;delete chat.failed;render(current===chat.id);
+  try {
+    let contextSize=0;
+    const messages=[];
+    for (const message of chat.messages.slice(-100).reverse()) {
+      const item={role:message.role,text:message.text,files:fileCache.get(message.id)};
+      const size=JSON.stringify(item).length;
+      if(contextSize+size>11000000)break;
+      contextSize+=size;
+      messages.unshift(item);
+    }
+    while(messages[0]?.role==='model')messages.shift();
+    let result;
+    if (config.isStatic || (!config.hasServerKey && clientKey)) {
+      result = await callOpenRouterDirect(messages, config.model, clientKey);
+    } else {
+      result = await api('chat',{messages});
+    }
+    chat.messages.push({role:'model',text:result.reply,usage:result.usage});
+    temperature=result.temperature;
+    projectBlocked=false;
+  } catch(error) {
+    chat.failed={message:error.message,code:error.code};
+    if(error.code==='OPENROUTER_CREDITS_EXHAUSTED'||error.code==='OPENROUTER_AUTH_ERROR')projectBlocked=true;
+  }
+  finally {
+    pending=false;delete chat.pending;save();render(current===chat.id);
+  }
+}
+$(send).onclick = (e) => {
+  e.preventDefault();
+  $(composer).requestSubmit();
+};
+$('composer').onsubmit=event=>{
+  event.preventDefault();
+  event.preventDefault();
+  if(pending||readingFiles)return;
+  const text=$('prompt').value.trim()||(files.length?'Please help me understand the attached material.':'');
+  if(!text)return;
+  if(!config.hasServerKey && !clientKey){settings();return;}
+  const chat=getChat()||createChat(text);
+  if(chat.failed) {
+    toast('Retry the previous message or start a new chat.');
+    return;
+  }
+  const id=crypto.randomUUID();
+  if(files.length)fileCache.set(id,files);
+  chat.messages.push({id,role:'user',text,names:files.map(file=>file.name)});
+  files=[];$('prompt').value='';save();sendChat(chat);
+};
+$('prompt').onkeydown=event=>{
+  if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();$('composer').requestSubmit();}
+};
+function highlight() {
+  const query=$('findbar').hidden?'':$('find-input').value.trim();
+  const marks=[];
+  if(query){
+    const escaped=query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const regex = new RegExp(escaped,'gi');
+    const walker=document.createTreeWalker($('messages'),NodeFilter.SHOW_TEXT);
+    const candidates=[];
+    while(walker.nextNode())if(walker.currentNode.parentElement.closest('.message-body'))candidates.push(walker.currentNode);
+    for(const text of candidates){
+      const hits=[...text.data.matchAll(regex)];
+      if(!hits.length)continue;
+      const fragment=document.createDocumentFragment();
+      let offset=0;
+      for (const hit of hits) {
+        const mark=node('mark',hit[0]);
+        fragment.append(text.data.slice(offset,hit.index),mark);
+        offset=hit.index+hit[0].length;
+        marks.push(mark);
+      }
+      fragment.append(text.data.slice(offset));text.replaceWith(fragment);
+    }
+  }
+  if(marks.length)match=(match+marks.length)%marks.length;
+  marks[match]?.classList.add('active');
+  $('find-count').textContent=marks.length?`${match+1} of ${marks.length}`:query?'0 matches':'';
+  $('prev').disabled=$('next').disabled=!marks.length;
+}
+function openFind() {
+  if(!getChat())return;
+  $('findbar').hidden=false;renderMessages(getChat());$('find-input').focus();
+}
+function findMove(direction) {
+  const marks=[...$('messages').querySelectorAll('mark')];
+  if(!marks.length)return;
+  marks[match]?.classList.remove('active');
+  match=(match+direction+marks.length)%marks.length;
+  marks[match].classList.add('active');
+  marks[match].scrollIntoView({block:'center'});
+  $('find-count').textContent=`${match+1} of ${marks.length}`;
+}
+$('find').onclick=openFind;
+$('find-input').oninput=()=>{match=0;renderMessages(getChat());$('messages').querySelector('mark.active')?.scrollIntoView({block:'center'});};
+$('find-input').onkeydown=event=>{if(event.key==='Enter')findMove(event.shiftKey?-1:1);};
+$('next').onclick=()=>findMove(1);
+$('prev').onclick=()=>findMove(-1);
+$('close-find').onclick=()=>{$('findbar').hidden=true;$('find-input').value='';renderMessages(getChat());$('find').focus();};
+$('search').onclick=()=>{
+  const input=node('input');input.type='search';input.placeholder='Search titles and messages';input.setAttribute('aria-label','Search titles and messages');
+  const results=node('div');
+  const update=()=>{
+    const query=input.value.trim().toLowerCase();
+    const matches=chats.filter(chat=>chat.title.toLowerCase().includes(query)||chat.messages.some(message=>message.text.toLowerCase().includes(query)));
+    results.replaceChildren(...matches.map(chat=>action(chat.title,()=>{
+      choose(chat.id);$('modal').close();
+      if(query){$('find-input').value=input.value.trim();openFind();$('messages').querySelector('mark.active')?.scrollIntoView({block:'center'});}
+    },'result')));
+    if(!matches.length)results.append(node('p','No matching conversations.','dialog-copy'));
+  };
+  input.oninput=update;update();openDialog('Search chats',input,results);input.focus();
+};
+document.addEventListener('keydown',event=>{
+  if($('modal').open)return;
+  if(event.altKey&&event.key.toLowerCase()==='n'){event.preventDefault();newChat();}
+  if((event.metaKey||event.ctrlKey)&&event.key==='f'&&getChat()){event.preventDefault();openFind();}
+  if(event.key==='Escape')closeSidebar();
+});
+$('dictate').onclick=()=>{
+  if(recording){recording.stop();return;}
+  const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!Recognition){toast('Dictation needs browser speech recognition. Live voice also accepts speech directly.');return;}
+  const speech=new Recognition();
+  speech.lang=navigator.language;speech.interimResults=false;speech.continuous=true;
+  speech.onstart=()=>{recording=speech;$('dictate').setAttribute('aria-pressed','true');toast('Listening. Say “send message” to send.');};
+  speech.onend=()=>{recording=null;$('dictate').setAttribute('aria-pressed','false');};
+  speech.onerror=event=>toast('Dictation: '+event.error.replaceAll('-',' ')+'.');
+  speech.onresult=event=>{
+    for(let index=event.resultIndex;index<event.results.length;index++){
+      const text=event.results[index][0].transcript.trim();
+      const command=text.match(/^(.*?)\s*\bsend message[.!?]?$/i);
+      if(command){
+        if(command[1])$('prompt').value+=($('prompt').value?' ':'')+command[1];
+        speech.stop();$('composer').requestSubmit();break;
+      }
+      $('prompt').value+=($('prompt').value?' ':'')+text;
+    }
+  };
+  try{speech.start();}catch{toast('Dictation could not start.');}
+};
+function switchProfile(next) {
+  if(pending){toast('Wait for the current response before switching accounts.');return;}
+  profile=next;
+  sessionStorage.setItem('rosogolla.profile',JSON.stringify(next));
+  chats=restoreChats(profile?.id);
+  fileCache.clear();
+  newChat();
+  $('modal').close();
+}
+let googleScript;
+$('account').onclick=async()=>{
+  if(profile){
+    openDialog('Your account',node('p',profile.email||profile.name,'dialog-copy'),action('Sign out',()=>{window.google?.accounts.id.disableAutoSelect();switchProfile(null);},'dialog-action'));
+    return;
+  }
+  if(!config.googleClientId){
+    openDialog('Sign in with Google',node('p','This installation needs a Google OAuth Web client ID in GOOGLE_CLIENT_ID. See the project setup guide.','dialog-copy'));
+    return;
+  }
+  const container=node('div');
+  const status=node('p','Chat history is kept in this browser for each account.','dialog-copy');
+  openDialog('Sign in with Google',status,container);
+  try{
+    if(!window.google?.accounts?.id){
+      googleScript??=new Promise((resolve,reject)=>{
+        const script=node('script');script.src='https://accounts.google.com/gsi/client';script.async=true;
+        script.onload=resolve;script.onerror=()=>{script.remove();googleScript=null;reject();};
+        document.head.append(script);
+      });
+      await googleScript;
+    }
+    google.accounts.id.initialize({client_id:config.googleClientId,callback:async({credential})=>{
+      try{switchProfile(await api('google',{credential}));}catch(error){status.textContent=error.message;}
+    }});
+    google.accounts.id.renderButton(container,{theme:'filled_black',size:'large',text:'signin_with'});
+  }catch{status.textContent='Google sign-in could not load.';}
+};
+function showLive() {
+  if(activeLive)return;
+  const stage=node('div','','voice-stage');
+  const orbit=node('div','','orbit');
+  orbit.setAttribute('aria-hidden','true');
+  const orb=node('div','','orb');
+  orbit.append(orb);
+  const status=node('p','Speak with Rosogolla in real time.','dialog-copy voice-status');
+  status.setAttribute('role','status');
+  const caption=node('p','','voice-caption');
+  caption.hidden=true;
+  const start=action('Start conversation',()=>{
+    if(!config.hasServerKey){settings();return;}
+    if(pending){toast('Wait for the current response before starting live voice.');return;}
+    recording?.stop();
+    status.textContent='Connecting and requesting microphone access…';
+    stage.dataset.state='connecting';
+    caption.hidden=false;
+    start.replaceWith(action('End session',()=>$('modal').close(),'dialog-action'));
+    connectLive(stage,orb,status,caption);
+  },'dialog-action');
+  stage.append(orbit,status,caption,start);
+  openDialog('Live with Rosogolla',stage);
+  $('modal').dataset.view='voice';
+}
+$('hero-live').onclick=$('live').onclick=showLive;
+function connectLive(stage,orb,status,caption) {
+  let chat=getChat();
+  const control=startLive({
+    authorize:()=>api('live'),
+    onStatus:(text,connected)=>{
+      status.textContent=text;
+      stage.dataset.state=connected?'listening':'ended';
+    },
+    onActivity:(state,level)=>{
+      stage.dataset.state=state;
+      orb.style.setProperty('--level',String(level));
+    },
+    onCaption:(text)=>{caption.textContent=text;caption.scrollTop=caption.scrollHeight;},
+    onTurn:({input,output,usage})=>{
+      if(!input&&!output&&!usage)return;
+      chat??=createChat('Live voice');
+      if(input)chat.messages.push({role:'user',text:input,voice:true});
+      if(output||usage)chat.messages.push({role:'model',text:output||'',usage,voice:true});
+      save();render(current===chat.id);
+    },
+    onEnd:()=>{if(activeLive===control)activeLive=null;}
+  });
+  activeLive=control;
+}
+fetch('./api/config').then(response => {
+  if (!response.ok) throw new Error('Static host');
+  return response.json();
+}).then(data => {
+  config = data;
+  if (!config.hasServerKey && clientKey) config.hasServerKey = true;
+  render();
+}).catch(() => {
+  config = {
+    model: load('rosogolla.openrouter_model', 'openrouter/free'),
+    liveModel: '',
+    hasServerKey: !!clientKey,
+    googleClientId: '',
+    liveVoiceEnabled: false,
+    isStatic: true
+  };
+  render();
+});
+render();
+
+
 
 setupBackgroundVoice();
 setupIntroOverlay();
